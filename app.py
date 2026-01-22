@@ -21,6 +21,19 @@ app.config['ALLOWED_EXTENSIONS'] = {'xlsx', 'xls'}
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Custom Jinja filters (Phase 6)
+@app.template_filter('from_json')
+def from_json_filter(value):
+    """Parse JSON string to Python object."""
+    if value is None or value == '':
+        return None
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return value
+
 # Global state for scraping job
 scraping_state = {
     'running': False,

@@ -9,7 +9,7 @@ from importers.excel_importer import import_excel_file, validate_excel_file
 from enrichment.google_places import enrich_business
 from enrichment.web_scraper import scrape_and_extract
 from enrichment.gemini_client import enrich_lead_with_gemini, generate_personalization
-from enrichment.scorer import calculate_score
+from enrichment.scorer import calculate_score, calculate_geo_score
 from exporters.instantly_exporter import export_to_csv, export_to_excel, get_export_filename
 
 app = Flask(__name__)
@@ -985,6 +985,109 @@ def score_single_lead(lead_id):
             'score': score_data['total'],
             'tier': score_data['tier'],
             'signals': score_data['signals']
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/rescore/all', methods=['POST'])
+def rescore_all_leads():
+    """
+    Re-score all enriched leads with new ICP-based scoring model (Phases 3-4).
+    Uses geographic intelligence and ICP qualification gate.
+
+    This is faster than re-enrichment since it doesn't call Gemini API.
+
+    Optional JSON body:
+        batch_size: Limit number of leads to rescore (default: all)
+    """
+    try:
+        # Get optional batch_size
+        batch_size = None
+        if request.is_json:
+            data = request.get_json()
+            batch_size = data.get('batch_size', None)
+            if batch_size is not None:
+                batch_size = int(batch_size)
+
+        # Get all enriched leads
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT * FROM leads
+            WHERE gemini_status = 'enriched'
+            ORDER BY imported_at DESC
+        """
+
+        if batch_size:
+            query += f" LIMIT {batch_size}"
+
+        cursor.execute(query)
+        leads = cursor.fetchall()
+
+        results = {
+            'total': len(leads),
+            'rescored': 0,
+            'tier_distribution': {'A': 0, 'B': 0, 'C': 0, 'U': 0},
+            'icp_distribution': {
+                'primary': 0,
+                'secondary': 0,
+                'tertiary': 0,
+                'disqualified': 0
+            }
+        }
+
+        for lead in leads:
+            # Convert to dict for scorer
+            lead_dict = dict(lead)
+
+            # Calculate score with new ICP-based model (includes geo scoring)
+            score_result = calculate_score(lead_dict)
+
+            # Update database with new score, tier, ICP status, and geo score
+            cursor.execute('''
+                UPDATE leads
+                SET score = ?,
+                    tier = ?,
+                    icp_qualified = ?,
+                    icp_type = ?,
+                    geo_score = ?,
+                    score_breakdown = ?,
+                    rescored_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (
+                score_result['total'],
+                score_result['tier'],
+                score_result.get('icp_qualified'),
+                score_result.get('icp_type'),
+                score_result.get('geo_score', 0),
+                json.dumps({
+                    'total': score_result['total'],
+                    'signals': score_result['signals'],
+                    'tier': score_result['tier'],
+                    'has_data': score_result['has_data']
+                }),
+                lead['id']
+            ))
+
+            results['rescored'] += 1
+            results['tier_distribution'][score_result['tier']] += 1
+            results['icp_distribution'][score_result.get('icp_type', 'disqualified')] += 1
+
+        conn.commit()
+        conn.close()
+
+        message = f"Rescored {results['rescored']} leads with new ICP-based model"
+        if batch_size:
+            message += f" (batch size: {batch_size})"
+
+        return jsonify({
+            'success': True,
+            'message': message,
+            'tier_distribution': results['tier_distribution'],
+            'icp_distribution': results['icp_distribution'],
+            'total': results['total']
         })
 
     except Exception as e:

@@ -140,7 +140,11 @@ def migrate_db():
         ('disqualification_signals', 'TEXT DEFAULT NULL'),  # JSON array: ["landscaping", "lawn care"]
         ('geo_score', 'INTEGER DEFAULT 0'),  # Geographic proximity score
         ('icp_qualified', 'BOOLEAN DEFAULT NULL'),  # Passed ICP qualification gate
-        ('icp_type', 'TEXT DEFAULT NULL')  # primary/secondary/tertiary/disqualified
+        ('icp_type', 'TEXT DEFAULT NULL'),  # primary/secondary/tertiary/disqualified
+        # Phase 5: Re-enrichment tracking columns
+        ('re_enrichment_status', 'TEXT DEFAULT "pending"'),  # pending/completed/failed/skipped
+        ('re_enriched_at', 'TIMESTAMP DEFAULT NULL'),  # When re-enrichment completed
+        ('rescored_at', 'TIMESTAMP DEFAULT NULL')  # When rescored with new model
     ]
 
     migrations_applied = False

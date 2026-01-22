@@ -88,6 +88,88 @@ def index():
     """Home page."""
     return render_template('upload.html')
 
+@app.route('/dashboard')
+def dashboard():
+    """Dashboard with pipeline stats (Phase 8)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Pipeline progress
+    cursor.execute("""
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN enrichment_status = 'enriched' THEN 1 ELSE 0 END) as google_enriched,
+            SUM(CASE WHEN scrape_status = 'scraped' THEN 1 ELSE 0 END) as scraped,
+            SUM(CASE WHEN gemini_status = 'enriched' THEN 1 ELSE 0 END) as ai_enriched,
+            SUM(CASE WHEN score IS NOT NULL THEN 1 ELSE 0 END) as scored,
+            SUM(CASE WHEN reviewed_at IS NOT NULL THEN 1 ELSE 0 END) as reviewed
+        FROM leads
+    """)
+    pipeline = dict(cursor.fetchone())
+
+    # Tier distribution
+    cursor.execute("""
+        SELECT
+            COALESCE(tier_override, tier, 'U') as tier,
+            COUNT(*) as count
+        FROM leads
+        WHERE score IS NOT NULL
+        GROUP BY COALESCE(tier_override, tier, 'U')
+    """)
+    tier_dist = {row['tier']: row['count'] for row in cursor.fetchall()}
+
+    # Geographic distribution
+    cursor.execute("""
+        SELECT
+            state,
+            COUNT(*) as count,
+            AVG(score) as avg_score
+        FROM leads
+        WHERE state IS NOT NULL
+        GROUP BY state
+        ORDER BY count DESC
+    """)
+    geo_dist = [dict(row) for row in cursor.fetchall()]
+
+    # ICP type distribution
+    cursor.execute("""
+        SELECT
+            COALESCE(icp_type, 'unknown') as icp_type,
+            COUNT(*) as count
+        FROM leads
+        GROUP BY icp_type
+    """)
+    icp_dist = {row['icp_type']: row['count'] for row in cursor.fetchall()}
+
+    # Top signals (most common positive signals)
+    cursor.execute("""
+        SELECT score_breakdown
+        FROM leads
+        WHERE score_breakdown IS NOT NULL
+    """)
+    signal_counts = {}
+    for row in cursor.fetchall():
+        try:
+            breakdown = json.loads(row['score_breakdown'])
+            if 'signals' in breakdown:
+                for signal in breakdown['signals']:
+                    if signal.get('points', 0) > 0:  # Only positive signals
+                        desc = signal.get('description', 'Unknown')
+                        signal_counts[desc] = signal_counts.get(desc, 0) + 1
+        except:
+            pass
+    top_signals = sorted(signal_counts.items(), key=lambda x: -x[1])[:10]
+
+    conn.close()
+
+    return render_template('dashboard.html',
+        pipeline=pipeline,
+        tier_dist=tier_dist,
+        geo_dist=geo_dist,
+        icp_dist=icp_dist,
+        top_signals=top_signals
+    )
+
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     """Handle file upload and import."""

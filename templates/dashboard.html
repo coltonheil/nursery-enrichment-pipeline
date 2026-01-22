@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Nursery Pipeline{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>📊 Pipeline Dashboard</h1>
+        <p class="subtitle">Real-time insights into your lead enrichment pipeline</p>
+    </div>
+
+    <!-- Pipeline Progress -->
+    <section class="dashboard-section">
+        <h2>Pipeline Progress</h2>
+        <div class="progress-cards">
+            <div class="progress-card">
+                <div class="progress-value">{{ pipeline.total }}</div>
+                <div class="progress-label">Total Leads</div>
+            </div>
+            <div class="progress-card">
+                <div class="progress-value">{{ pipeline.google_enriched }}</div>
+                <div class="progress-label">Google Enriched</div>
+                <div class="progress-bar">
+                    <div class="fill" style="width: {{ (pipeline.google_enriched / pipeline.total * 100)|round if pipeline.total else 0 }}%"></div>
+                </div>
+                <div class="progress-percent">{{ ((pipeline.google_enriched / pipeline.total * 100)|round) if pipeline.total else 0 }}%</div>
+            </div>
+            <div class="progress-card">
+                <div class="progress-value">{{ pipeline.scraped }}</div>
+                <div class="progress-label">Websites Scraped</div>
+                <div class="progress-bar">
+                    <div class="fill" style="width: {{ (pipeline.scraped / pipeline.total * 100)|round if pipeline.total else 0 }}%"></div>
+                </div>
+                <div class="progress-percent">{{ ((pipeline.scraped / pipeline.total * 100)|round) if pipeline.total else 0 }}%</div>
+            </div>
+            <div class="progress-card">
+                <div class="progress-value">{{ pipeline.ai_enriched }}</div>
+                <div class="progress-label">AI Enriched</div>
+                <div class="progress-bar">
+                    <div class="fill" style="width: {{ (pipeline.ai_enriched / pipeline.total * 100)|round if pipeline.total else 0 }}%"></div>
+                </div>
+                <div class="progress-percent">{{ ((pipeline.ai_enriched / pipeline.total * 100)|round) if pipeline.total else 0 }}%</div>
+            </div>
+            <div class="progress-card">
+                <div class="progress-value">{{ pipeline.scored }}</div>
+                <div class="progress-label">Scored</div>
+                <div class="progress-bar">
+                    <div class="fill" style="width: {{ (pipeline.scored / pipeline.total * 100)|round if pipeline.total else 0 }}%"></div>
+                </div>
+                <div class="progress-percent">{{ ((pipeline.scored / pipeline.total * 100)|round) if pipeline.total else 0 }}%</div>
+            </div>
+            <div class="progress-card">
+                <div class="progress-value">{{ pipeline.reviewed }}</div>
+                <div class="progress-label">Reviewed</div>
+                <div class="progress-bar">
+                    <div class="fill" style="width: {{ (pipeline.reviewed / pipeline.total * 100)|round if pipeline.total else 0 }}%"></div>
+                </div>
+                <div class="progress-percent">{{ ((pipeline.reviewed / pipeline.total * 100)|round) if pipeline.total else 0 }}%</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="dashboard-grid">
+        <!-- Tier Distribution -->
+        <section class="dashboard-section">
+            <h2>Tier Distribution</h2>
+            <div class="tier-chart">
+                {% for tier in ['A', 'B', 'C', 'U'] %}
+                <div class="tier-column">
+                    <div class="tier-bar tier-{{ tier|lower }}">
+                        <div class="bar" style="height: {{ (tier_dist.get(tier, 0) / pipeline.scored * 100)|round if pipeline.scored else 0 }}%">
+                            <span class="bar-value">{{ tier_dist.get(tier, 0) }}</span>
+                        </div>
+                    </div>
+                    <div class="tier-label">Tier {{ tier }}</div>
+                    <div class="tier-count">{{ tier_dist.get(tier, 0) }} leads</div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- ICP Distribution -->
+        <section class="dashboard-section">
+            <h2>ICP Type Distribution</h2>
+            <div class="icp-chart">
+                {% for icp_type in ['primary', 'secondary', 'tertiary', 'disqualified'] %}
+                    {% set count = icp_dist.get(icp_type, 0) %}
+                    {% if count > 0 %}
+                    <div class="icp-row">
+                        <span class="icp-label">{{ icp_type|title }}</span>
+                        <div class="icp-bar-container">
+                            <div class="icp-bar">
+                                <div class="fill icp-{{ icp_type }}" style="width: {{ (count / pipeline.total * 100)|round if pipeline.total else 0 }}%"></div>
+                            </div>
+                            <span class="icp-count">{{ count }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Geographic Distribution -->
+        <section class="dashboard-section">
+            <h2>Geographic Distribution (Top 10)</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>State</th>
+                        <th>Count</th>
+                        <th>Avg Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in geo_dist[:10] %}
+                    <tr>
+                        <td><strong>{{ row.state }}</strong></td>
+                        <td>{{ row.count }}</td>
+                        <td>{{ row.avg_score|round(1) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Top Signals -->
+        <section class="dashboard-section">
+            <h2>Most Common Positive Signals</h2>
+            {% if top_signals %}
+            <ol class="signal-ranking">
+                {% for signal, count in top_signals %}
+                <li>
+                    <span class="signal-name">{{ signal }}</span>
+                    <span class="signal-count">{{ count }} leads</span>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="empty-state">No signal data available yet</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

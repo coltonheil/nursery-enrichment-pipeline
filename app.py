@@ -1144,6 +1144,57 @@ def api_get_lead(lead_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/leads/<int:lead_id>/tier-override', methods=['POST'])
+def set_tier_override(lead_id):
+    """Set manual tier override for a lead (Phase 7 - Keyboard Shortcuts)."""
+    try:
+        data = request.get_json()
+        tier = data.get('tier')
+
+        if tier not in ['A', 'B', 'C', 'U']:
+            return jsonify({"error": "Invalid tier"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE leads SET
+                tier_override = ?,
+                reviewed_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (tier, lead_id))
+        conn.commit()
+        conn.close()
+
+        log_action(lead_id, 'tier_override', f"Tier set to {tier}")
+
+        return jsonify({"status": "ok", "tier": tier})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/leads/<int:lead_id>/reviewed', methods=['POST'])
+def mark_reviewed(lead_id):
+    """Mark a lead as reviewed (Phase 7 - Keyboard Shortcuts)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE leads SET
+                reviewed_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (lead_id,))
+        conn.commit()
+        conn.close()
+
+        log_action(lead_id, 'reviewed', 'Marked as reviewed')
+
+        return jsonify({"status": "ok"})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/lead/<int:lead_id>/review', methods=['POST'])
 def api_update_review(lead_id):
     """Update lead review data (tier override, notes)."""

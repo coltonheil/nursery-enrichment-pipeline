@@ -160,6 +160,24 @@ def migrate_db():
     if migrations_applied:
         print("Database migrations completed")
 
+    # Phase 9: Create pipeline_runs table for reliability tracking
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pipeline_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_type TEXT NOT NULL,
+            status TEXT DEFAULT 'running',
+            total_leads INTEGER DEFAULT 0,
+            completed_leads INTEGER DEFAULT 0,
+            failed_leads INTEGER DEFAULT 0,
+            current_lead_id INTEGER,
+            error_log TEXT,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP,
+            config TEXT
+        )
+    """)
+    print("Pipeline runs table created (Phase 9)")
+
     conn.commit()
     conn.close()
 

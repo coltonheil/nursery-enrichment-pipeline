@@ -79,6 +79,78 @@ pipeline_state = {
     'errors': []
 }
 
+# Phase 9: Pipeline run tracking functions
+
+def get_or_create_pipeline_run(run_type: str, config: dict = None):
+    """Get existing incomplete run or create new one (Phase 9)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check for incomplete run
+    cursor.execute("""
+        SELECT * FROM pipeline_runs
+        WHERE run_type = ? AND status = 'running'
+        ORDER BY started_at DESC
+        LIMIT 1
+    """, (run_type,))
+
+    existing = cursor.fetchone()
+
+    if existing:
+        conn.close()
+        return dict(existing), True  # (run, is_resume)
+
+    # Create new run
+    cursor.execute("""
+        INSERT INTO pipeline_runs (run_type, config)
+        VALUES (?, ?)
+    """, (run_type, json.dumps(config or {})))
+
+    run_id = cursor.lastrowid
+    conn.commit()
+
+    cursor.execute("SELECT * FROM pipeline_runs WHERE id = ?", (run_id,))
+    new_run = dict(cursor.fetchone())
+    conn.close()
+
+    return new_run, False
+
+
+def update_pipeline_progress(run_id: int, completed: int, failed: int, current_lead_id: int = None, error: str = None):
+    """Update pipeline run progress (Phase 9)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE pipeline_runs SET
+            completed_leads = ?,
+            failed_leads = ?,
+            current_lead_id = ?,
+            error_log = COALESCE(error_log, '') || ?
+        WHERE id = ?
+    """, (completed, failed, current_lead_id,
+          f"\n{error}" if error else "", run_id))
+
+    conn.commit()
+    conn.close()
+
+
+def complete_pipeline_run(run_id: int, status: str = 'completed'):
+    """Mark pipeline run as complete (Phase 9)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE pipeline_runs SET
+            status = ?,
+            completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (status, run_id))
+
+    conn.commit()
+    conn.close()
+
+
 def allowed_file(filename):
     """Check if file extension is allowed."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -376,10 +448,15 @@ def run_full_pipeline(batch_size):
     """
     Background job to run the complete enrichment pipeline on a batch of leads.
     Steps: Google Places → Scrape Websites → AI Enrichment → Scoring
+    Phase 9: Now tracks run in pipeline_runs table
     """
     global pipeline_state
 
     try:
+        # Phase 9: Create pipeline run tracking
+        run, is_resume = get_or_create_pipeline_run('full_pipeline', {'batch_size': batch_size})
+        run_id = run['id']
+
         pipeline_state['batch_size'] = batch_size
         pipeline_state['completed_steps'] = 0
         pipeline_state['errors'] = []
@@ -556,9 +633,18 @@ def run_full_pipeline(batch_size):
         pipeline_state['overall_progress'] = 100
         pipeline_state['status_message'] = f'Pipeline complete! Processed {total_leads} leads'
 
+        # Phase 9: Mark pipeline run as complete
+        update_pipeline_progress(run_id, total_leads, 0, None, None)
+        complete_pipeline_run(run_id, 'completed')
+
     except Exception as e:
         pipeline_state['errors'].append(str(e))
         pipeline_state['status_message'] = f'Error: {str(e)[:100]}'
+        # Phase 9: Mark as failed
+        try:
+            complete_pipeline_run(run_id, 'failed')
+        except:
+            pass
     finally:
         pipeline_state['running'] = False
         pipeline_state['current_step'] = None

@@ -1,0 +1,569 @@
+{% extends "base.html" %}
+
+{% block title %}Leads - Nursery Enrichment Pipeline{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-list-ul"></i> Imported Leads
+                </h4>
+                <div>
+                    <span class="badge bg-light text-dark me-2">{{ total_count if total_count is defined else leads|length }} leads</span>
+
+                    <!-- Full Pipeline Button (NEW - Automated) -->
+                    <div class="btn-group me-2" role="group">
+                        <button id="full-pipeline-btn" class="btn btn-success btn-sm fw-bold">
+                            <i class="bi bi-play-circle-fill"></i> Run Full Pipeline
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><h6 class="dropdown-header">Batch Size</h6></li>
+                            <li><a class="dropdown-item" href="#" onclick="setPipelineBatchSize(25)">Next 25 Leads (Recommended)</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setPipelineBatchSize(50)">Next 50 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setPipelineBatchSize(100)">Next 100 Leads</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="px-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" id="custom-pipeline-batch-size" class="form-control" placeholder="Custom" min="1">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="setPipelineBatchSize(document.getElementById('custom-pipeline-batch-size').value)">Go</button>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <span class="text-muted me-2">|</span>
+
+                    <!-- Individual Step Buttons -->
+                    <div class="btn-group me-2" role="group">
+                        <button id="google-places-btn" class="btn btn-primary btn-sm">
+                            <i class="bi bi-geo-alt"></i> Google Places
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><h6 class="dropdown-header">Batch Size</h6></li>
+                            <li><a class="dropdown-item" href="#" onclick="setGooglePlacesBatchSize(null)">All Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setGooglePlacesBatchSize(10)">Next 10 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setGooglePlacesBatchSize(25)">Next 25 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setGooglePlacesBatchSize(50)">Next 50 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setGooglePlacesBatchSize(100)">Next 100 Leads</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="px-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" id="custom-google-places-batch-size" class="form-control" placeholder="Custom" min="1">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="setGooglePlacesBatchSize(document.getElementById('custom-google-places-batch-size').value)">Go</button>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <button id="scrape-websites-btn" class="btn btn-warning btn-sm me-2">
+                        <i class="bi bi-download"></i> Scrape Websites
+                    </button>
+                    <div class="btn-group me-2" role="group">
+                        <button id="ai-enrich-btn" class="btn btn-info btn-sm">
+                            <i class="bi bi-stars"></i> AI Enrich
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><h6 class="dropdown-header">Batch Size</h6></li>
+                            <li><a class="dropdown-item" href="#" onclick="setBatchSize(null)">All Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setBatchSize(10)">Next 10 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setBatchSize(25)">Next 25 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setBatchSize(50)">Next 50 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setBatchSize(100)">Next 100 Leads</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="px-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" id="custom-batch-size" class="form-control" placeholder="Custom" min="1">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="setBatchSize(document.getElementById('custom-batch-size').value)">Go</button>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="btn-group me-2" role="group">
+                        <button id="score-all-btn" class="btn btn-success btn-sm">
+                            <i class="bi bi-calculator"></i> Score Leads
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><h6 class="dropdown-header">Batch Size</h6></li>
+                            <li><a class="dropdown-item" href="#" onclick="setScoreBatchSize(null)">All Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setScoreBatchSize(10)">Next 10 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setScoreBatchSize(25)">Next 25 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setScoreBatchSize(50)">Next 50 Leads</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setScoreBatchSize(100)">Next 100 Leads</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="px-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" id="custom-score-batch-size" class="form-control" placeholder="Custom" min="1">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="setScoreBatchSize(document.getElementById('custom-score-batch-size').value)">Go</button>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <button id="personalize-btn" class="btn btn-primary btn-sm me-2">
+                        <i class="bi bi-envelope-heart"></i> Generate Personalization
+                    </button>
+                    <a href="{{ url_for('export_page') }}" class="btn btn-dark btn-sm me-2">
+                        <i class="bi bi-download"></i> Export Leads
+                    </a>
+                    <button id="enrich-selected-btn" class="btn btn-light btn-sm" disabled>
+                        <i class="bi bi-stars"></i> Enrich Selected
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Full Pipeline Progress -->
+                <div id="pipeline-progress" class="alert alert-success" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">
+                            <i class="bi bi-play-circle-fill"></i> Full Pipeline Running
+                        </h5>
+                        <button id="stop-pipeline-btn" class="btn btn-sm btn-danger">
+                            <i class="bi bi-stop-circle"></i> Stop
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span id="pipeline-status-message" class="fw-bold">Initializing...</span>
+                            <span id="pipeline-step-indicator" class="badge bg-dark">Step 0/4</span>
+                        </div>
+                        <div class="progress mb-2" style="height: 30px;">
+                            <div id="pipeline-overall-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%">
+                                <span id="pipeline-overall-percentage">0%</span>
+                            </div>
+                        </div>
+                        <div class="small text-muted">
+                            Current step progress: <span id="pipeline-step-percentage">0%</span>
+                        </div>
+                    </div>
+                    <div class="row text-center small">
+                        <div class="col-3">
+                            <div class="border rounded p-2" id="step-1-indicator">
+                                <i class="bi bi-geo-alt"></i><br>
+                                <small>Google Places</small>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="border rounded p-2" id="step-2-indicator">
+                                <i class="bi bi-download"></i><br>
+                                <small>Scrape</small>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="border rounded p-2" id="step-3-indicator">
+                                <i class="bi bi-stars"></i><br>
+                                <small>AI Enrich</small>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="border rounded p-2" id="step-4-indicator">
+                                <i class="bi bi-calculator"></i><br>
+                                <small>Score</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Google Places Enrichment Progress -->
+                <div id="google-places-progress" class="alert alert-primary" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">
+                            <i class="bi bi-geo-alt"></i> Google Places Enrichment
+                        </h5>
+                        <button id="stop-google-places-btn" class="btn btn-sm btn-danger">
+                            <i class="bi bi-stop-circle"></i> Stop
+                        </button>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div id="google-places-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <strong id="google-places-completed">0</strong> Enriched
+                        </div>
+                        <div class="col-4">
+                            <strong id="google-places-failed">0</strong> Failed
+                        </div>
+                        <div class="col-4">
+                            <strong id="google-places-total">0</strong> Total
+                        </div>
+                    </div>
+                    <div id="google-places-current" class="mt-2 text-muted small"></div>
+                </div>
+
+                <!-- Scraping Progress -->
+                <div id="scraping-progress" class="alert alert-info" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">
+                            <i class="bi bi-download"></i> Scraping Websites
+                        </h5>
+                        <button id="stop-scraping-btn" class="btn btn-sm btn-danger">
+                            <i class="bi bi-stop-circle"></i> Stop
+                        </button>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div id="scraping-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <strong id="scraping-completed">0</strong> Scraped
+                        </div>
+                        <div class="col-4">
+                            <strong id="scraping-failed">0</strong> Failed
+                        </div>
+                        <div class="col-4">
+                            <strong id="scraping-total">0</strong> Total
+                        </div>
+                    </div>
+                    <div id="scraping-current" class="mt-2 text-muted small"></div>
+                </div>
+
+                <!-- AI Enrichment Progress -->
+                <div id="ai-enrichment-progress" class="alert alert-info" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">
+                            <i class="bi bi-stars"></i> AI Enrichment (Gemini)
+                        </h5>
+                        <button id="stop-ai-enrichment-btn" class="btn btn-sm btn-danger">
+                            <i class="bi bi-stop-circle"></i> Stop
+                        </button>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div id="ai-enrichment-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <strong id="ai-enrichment-completed">0</strong> Enriched
+                        </div>
+                        <div class="col-4">
+                            <strong id="ai-enrichment-failed">0</strong> Failed
+                        </div>
+                        <div class="col-4">
+                            <strong id="ai-enrichment-total">0</strong> Total
+                        </div>
+                    </div>
+                    <div id="ai-enrichment-current" class="mt-2 text-muted small"></div>
+                </div>
+
+                <!-- Personalization Progress -->
+                <div id="personalization-progress" class="alert alert-primary" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">
+                            <i class="bi bi-envelope-heart"></i> Generating Personalization
+                        </h5>
+                        <button id="stop-personalization-btn" class="btn btn-sm btn-danger">
+                            <i class="bi bi-stop-circle"></i> Stop
+                        </button>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div id="personalization-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <strong id="personalization-completed">0</strong> Generated
+                        </div>
+                        <div class="col-4">
+                            <strong id="personalization-failed">0</strong> Failed
+                        </div>
+                        <div class="col-4">
+                            <strong id="personalization-total">0</strong> Total
+                        </div>
+                    </div>
+                    <div id="personalization-current" class="mt-2 text-muted small"></div>
+                </div>
+
+                <!-- Tier Distribution -->
+                <div id="tier-distribution" class="alert alert-light border" style="display: none;">
+                    <h5 class="mb-3">
+                        <i class="bi bi-pie-chart"></i> Lead Distribution by Tier
+                    </h5>
+                    <div class="row text-center">
+                        <div class="col-3">
+                            <div class="card border-success">
+                                <div class="card-body">
+                                    <h2 class="text-success mb-0" id="tier-a-count">0</h2>
+                                    <small class="text-muted">Tier A</small>
+                                    <div class="small text-muted" id="tier-a-percent">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="card border-primary">
+                                <div class="card-body">
+                                    <h2 class="text-primary mb-0" id="tier-b-count">0</h2>
+                                    <small class="text-muted">Tier B</small>
+                                    <div class="small text-muted" id="tier-b-percent">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="card border-warning">
+                                <div class="card-body">
+                                    <h2 class="text-warning mb-0" id="tier-c-count">0</h2>
+                                    <small class="text-muted">Tier C</small>
+                                    <div class="small text-muted" id="tier-c-percent">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="card border-secondary">
+                                <div class="card-body">
+                                    <h2 class="text-secondary mb-0" id="tier-u-count">0</h2>
+                                    <small class="text-muted">Tier U</small>
+                                    <div class="small text-muted" id="tier-u-percent">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if leads or tier_filter or state_filter or business_type_filter or search %}
+                    <!-- Filters -->
+                    <form method="get" action="{{ url_for('leads') }}" class="mb-3">
+                        <div class="row g-2">
+                            <div class="col-md-2">
+                                <select name="tier" class="form-select form-select-sm">
+                                    <option value="">All Tiers</option>
+                                    <option value="A" {% if tier_filter == 'A' %}selected{% endif %}>Tier A</option>
+                                    <option value="B" {% if tier_filter == 'B' %}selected{% endif %}>Tier B</option>
+                                    <option value="C" {% if tier_filter == 'C' %}selected{% endif %}>Tier C</option>
+                                    <option value="U" {% if tier_filter == 'U' %}selected{% endif %}>Tier U</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select name="state" class="form-select form-select-sm">
+                                    <option value="">All States</option>
+                                    {% for state in states %}
+                                        <option value="{{ state }}" {% if state_filter == state %}selected{% endif %}>{{ state }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select name="business_type" class="form-select form-select-sm">
+                                    <option value="">All Types</option>
+                                    {% for btype in business_types %}
+                                        <option value="{{ btype }}" {% if business_type_filter == btype %}selected{% endif %}>{{ btype }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" name="search" class="form-control form-control-sm" placeholder="Search business name..." value="{{ search or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <div class="btn-group w-100" role="group">
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-funnel"></i> Apply Filters
+                                    </button>
+                                    <a href="{{ url_for('leads') }}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-x"></i> Clear
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-success" id="select-all-page-btn">
+                                        <i class="bi bi-check-square"></i> Select All
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Bulk Actions -->
+                    <div class="mb-3" id="bulk-actions-bar" style="display: none;">
+                        <div class="alert alert-info d-flex justify-content-between align-items-center">
+                            <span><strong id="selected-count">0</strong> leads selected</span>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                    <i class="bi bi-lightning"></i> Bulk Actions
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="bulkChangeTier('A')"><i class="bi bi-trophy-fill text-success"></i> Change to Tier A</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="bulkChangeTier('B')"><i class="bi bi-star-fill text-primary"></i> Change to Tier B</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="bulkChangeTier('C')"><i class="bi bi-star text-warning"></i> Change to Tier C</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="bulkChangeTier('U')"><i class="bi bi-question-circle text-secondary"></i> Change to Tier U</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="#" onclick="bulkMarkReviewed()"><i class="bi bi-check-circle"></i> Mark as Reviewed</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="leads-table">
+                            <thead class="table-success">
+                                <tr>
+                                    <th><input type="checkbox" id="select-all-checkbox"></th>
+                                    <th>ID</th>
+                                    <th>Business Name</th>
+                                    <th>City</th>
+                                    <th>State</th>
+                                    <th>Tier</th>
+                                    <th>Score</th>
+                                    <th>Phone</th>
+                                    <th>Website</th>
+                                    <th>Rating</th>
+                                    <th>Reviews</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lead in leads %}
+                                <tr id="lead-row-{{ lead['id'] }}" class="lead-row {% if lead['enrichment_status'] == 'enriched' %}table-success{% elif lead['enrichment_status'] == 'failed' %}table-danger{% elif lead['enrichment_status'] == 'pending' %}table-warning{% endif %}" data-lead-id="{{ lead['id'] }}" style="cursor: pointer;">
+                                    <td onclick="event.stopPropagation()"><input type="checkbox" class="lead-checkbox" value="{{ lead['id'] }}"></td>
+                                    <td onclick="openLeadModal({{ lead['id'] }})">{{ lead['id'] }}</td>
+                                    <td onclick="openLeadModal({{ lead['id'] }})">
+                                        <strong>{{ lead['business_name'] }}</strong>
+                                        {% if lead['reviewed_at'] %}
+                                            <i class="bi bi-check-circle-fill text-success ms-1" title="Reviewed"></i>
+                                        {% endif %}
+                                        {% if lead['tier_override'] %}
+                                            <i class="bi bi-pencil-square text-info ms-1" title="Manual override"></i>
+                                        {% endif %}
+                                        {% if lead['google_maps_url'] %}
+                                            <a href="{{ lead['google_maps_url'] }}" target="_blank" class="ms-1" onclick="event.stopPropagation()">
+                                                <i class="bi bi-geo-alt-fill text-danger"></i>
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                    <td onclick="openLeadModal({{ lead['id'] }})">{{ lead['city'] }}</td>
+                                    <td onclick="openLeadModal({{ lead['id'] }})">{{ lead['state'] or '-' }}</td>
+                                    <td class="tier-cell" onclick="openLeadModal({{ lead['id'] }})"
+                                        {% if lead['tier'] == 'A' %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-trophy-fill"></i> Tier A
+                                            </span>
+                                        {% elif lead['tier'] == 'B' %}
+                                            <span class="badge bg-primary">Tier B</span>
+                                        {% elif lead['tier'] == 'C' %}
+                                            <span class="badge bg-warning text-dark">Tier C</span>
+                                        {% elif lead['tier'] == 'U' %}
+                                            <span class="badge bg-secondary">Tier U</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">Not Scored</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="score-cell" onclick="openLeadModal({{ lead['id'] }})">
+                                        {% if lead['score'] is not none %}
+                                            <strong>{{ lead['score'] }}</strong>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="phone-cell" onclick="openLeadModal({{ lead['id'] }})">{{ lead['phone'] or '-' }}</td>
+                                    <td class="website-cell" onclick="openLeadModal({{ lead['id'] }})">
+                                        {% if lead['website'] %}
+                                            <a href="{{ lead['website'] }}" target="_blank" class="text-decoration-none" onclick="event.stopPropagation()">
+                                                <i class="bi bi-link-45deg"></i> Link
+                                            </a>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="rating-cell" onclick="openLeadModal({{ lead['id'] }})">
+                                        {% if lead['rating'] %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-star-fill"></i> {{ lead['rating'] }}
+                                            </span>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td class="review-count-cell" onclick="openLeadModal({{ lead['id'] }})">{{ lead['review_count'] or '-' }}</td>
+                                    <td onclick="event.stopPropagation()">
+                                        <button class="btn btn-sm btn-primary enrich-btn" data-lead-id="{{ lead['id'] }}" {% if lead['enrichment_status'] == 'enriched' %}disabled{% endif %}>
+                                            <i class="bi bi-stars"></i> Enrich
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                                <a class="page-link" href="?page={{ page - 1 }}{% if tier_filter %}&tier={{ tier_filter }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}{% if business_type_filter %}&business_type={{ business_type_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}">Previous</a>
+                            </li>
+
+                            {% for p in range(1, total_pages + 1) %}
+                                {% if p == page or p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                                    <li class="page-item {% if p == page %}active{% endif %}">
+                                        <a class="page-link" href="?page={{ p }}{% if tier_filter %}&tier={{ tier_filter }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}{% if business_type_filter %}&business_type={{ business_type_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}">{{ p }}</a>
+                                    </li>
+                                {% elif p == page - 3 or p == page + 3 %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                                <a class="page-link" href="?page={{ page + 1 }}{% if tier_filter %}&tier={{ tier_filter }}{% endif %}{% if state_filter %}&state={{ state_filter }}{% endif %}{% if business_type_filter %}&business_type={{ business_type_filter }}{% endif %}{% if search %}&search={{ search }}{% endif %}">Next</a>
+                            </li>
+                        </ul>
+                        <p class="text-center text-muted">
+                            Showing {{ (page - 1) * per_page + 1 }}-{{ [page * per_page, total_count]|min }} of {{ total_count }} leads
+                        </p>
+                    </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox display-1 text-muted"></i>
+                        <h5 class="mt-3 text-muted">No leads imported yet</h5>
+                        <p class="text-muted">Upload an Excel file to get started</p>
+                        <a href="{{ url_for('upload') }}" class="btn btn-success">
+                            <i class="bi bi-upload"></i> Upload Leads
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lead Detail Modal -->
+<div class="modal fade" id="leadModal" tabindex="-1" aria-labelledby="leadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="leadModalLabel">Lead Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="leadModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveReviewBtn">Save Review</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

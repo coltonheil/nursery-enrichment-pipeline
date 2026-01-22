@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"with open\\(''.env'', ''rb''\\) as f: print\\(f.read\\(\\)[:100]\\)\")",
+      "Bash(python test_google_debug.py:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(python test_gemini.py:*)",
+      "Bash(python:*)",
+      "Bash(timeout 3 tail:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 3 ping:*)",
+      "Bash(powershell.exe -Command \"Get-Clipboard | Out-File -FilePath ''clipboard_sync.md'' -Encoding utf8\")",
+      "Bash(del clipboard_sync.md)",
+      "Bash(if not exist exporters mkdir exporters)",
+      "Bash(node --check:*)"
+    ]
+  }
+}

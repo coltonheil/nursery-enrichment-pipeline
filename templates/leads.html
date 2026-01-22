@@ -1,6 +1,11 @@
 {% extends "base.html" %}
+{% from "components/lead_card.html" import lead_card %}
 
 {% block title %}Leads - Nursery Enrichment Pipeline{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/lead-cards.css') }}">
+{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -384,6 +389,21 @@
                         </div>
                     </form>
 
+                    <!-- View Toggle (Phase 6) -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="btn-group view-toggle" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary active" id="table-view-btn" onclick="switchView('table')">
+                                <i class="bi bi-table"></i> Table View
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="cards-view-btn" onclick="switchView('cards')">
+                                <i class="bi bi-grid-3x3-gap"></i> Card View
+                            </button>
+                        </div>
+                        <div class="text-muted small">
+                            Showing {{ leads|length }} leads
+                        </div>
+                    </div>
+
                     <!-- Bulk Actions -->
                     <div class="mb-3" id="bulk-actions-bar" style="display: none;">
                         <div class="alert alert-info d-flex justify-content-between align-items-center">
@@ -496,6 +516,13 @@
                         </table>
                     </div>
 
+                    <!-- Card View (Phase 6) -->
+                    <div id="leads-cards-container" class="leads-cards-container" style="display: none;">
+                        {% for lead in leads %}
+                            {{ lead_card(lead) }}
+                        {% endfor %}
+                    </div>
+
                     <!-- Pagination -->
                     {% if total_pages > 1 %}
                     <nav aria-label="Page navigation">
@@ -566,4 +593,65 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+// Phase 6: View Toggle Functionality
+function switchView(view) {
+    const tableContainer = document.querySelector('.table-responsive');
+    const cardsContainer = document.getElementById('leads-cards-container');
+    const tableBtn = document.getElementById('table-view-btn');
+    const cardsBtn = document.getElementById('cards-view-btn');
+
+    if (view === 'table') {
+        tableContainer.style.display = 'block';
+        cardsContainer.style.display = 'none';
+        tableBtn.classList.add('active');
+        cardsBtn.classList.remove('active');
+        localStorage.setItem('leadsView', 'table');
+    } else {
+        tableContainer.style.display = 'none';
+        cardsContainer.style.display = 'block';
+        tableBtn.classList.remove('active');
+        cardsBtn.classList.add('active');
+        localStorage.setItem('leadsView', 'cards');
+    }
+}
+
+// Restore saved view preference on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const savedView = localStorage.getItem('leadsView');
+    if (savedView === 'cards') {
+        switchView('cards');
+    }
+
+    // Add click handlers for "Full Details" buttons in cards
+    document.querySelectorAll('.lead-details-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const leadId = this.getAttribute('data-lead-id');
+            openLeadModal(leadId);
+        });
+    });
+
+    // Add click handlers for "Mark Reviewed" buttons in cards
+    document.querySelectorAll('.mark-reviewed-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const leadId = this.getAttribute('data-lead-id');
+            try {
+                const response = await fetch(`/api/lead/${leadId}/review`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                if (response.ok) {
+                    this.classList.remove('btn-outline-success');
+                    this.classList.add('btn-success');
+                    this.innerHTML = '<i class="bi bi-check-circle-fill"></i> Reviewed';
+                    // Reload to update both views
+                    setTimeout(() => location.reload(), 500);
+                }
+            } catch (e) {
+                console.error('Error marking as reviewed:', e);
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

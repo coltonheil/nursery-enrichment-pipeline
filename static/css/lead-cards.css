@@ -1,0 +1,402 @@
+/* Lead Card Styles - Phase 6 */
+
+.lead-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    border-left: 5px solid #ccc;
+    transition: all 0.2s ease;
+}
+
+.lead-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+/* Tier-based border colors */
+.lead-card.tier-a {
+    border-left-color: #22c55e;
+}
+
+.lead-card.tier-b {
+    border-left-color: #3b82f6;
+}
+
+.lead-card.tier-c {
+    border-left-color: #f59e0b;
+}
+
+.lead-card.tier-u,
+.lead-card.tier-unknown {
+    border-left-color: #94a3b8;
+}
+
+/* Tier Badge */
+.tier-badge {
+    display: inline-block;
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tier-badge.tier-a {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.tier-badge.tier-b {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.tier-badge.tier-c {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.tier-badge.tier-u,
+.tier-badge.tier-unknown {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+/* Header Section */
+.lead-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.lead-name {
+    flex: 1;
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #1e293b;
+    min-width: 200px;
+}
+
+.lead-location {
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Score Section */
+.lead-score-section {
+    margin-bottom: 1rem;
+}
+
+.score-display {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.score-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.score-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.score-max {
+    font-size: 1.25rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.score-bar {
+    height: 10px;
+    background: #f1f5f9;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.score-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ef4444 0%, #f59e0b 30%, #3b82f6 60%, #22c55e 100%);
+    transition: width 0.5s ease;
+}
+
+/* ICP and Geo Badges */
+.lead-icp-geo {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.icp-badge,
+.geo-badge {
+    display: inline-block;
+    padding: 0.4rem 0.9rem;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.icp-badge {
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+.icp-badge.icp-primary {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.icp-badge.icp-secondary {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.icp-badge.icp-tertiary {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.icp-badge.icp-disqualified,
+.icp-badge.icp-unknown {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.geo-badge {
+    background: #f0fdfa;
+    color: #115e59;
+}
+
+.geo-badge.geo-positive {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.geo-badge.geo-neutral {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.geo-badge.geo-negative {
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+/* Body Section */
+.lead-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+@media (max-width: 768px) {
+    .lead-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+.signals-column h4,
+.details-column h4 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+
+/* Signal List */
+.signal-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.signal-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.signal-item:last-child {
+    border-bottom: none;
+}
+
+.signal-check {
+    font-size: 1rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.signal-item.positive .signal-check {
+    color: #22c55e;
+}
+
+.signal-item.negative .signal-check {
+    color: #ef4444;
+}
+
+.signal-item.neutral .signal-check {
+    color: #94a3b8;
+}
+
+.signal-name {
+    flex: 1;
+    font-size: 0.85rem;
+    color: #334155;
+}
+
+.signal-points {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #1e293b;
+}
+
+.signal-item.positive .signal-points {
+    color: #16a34a;
+}
+
+.signal-item.negative .signal-points {
+    color: #dc2626;
+}
+
+.signal-item.more .signal-name {
+    color: #64748b;
+    font-style: italic;
+}
+
+/* Contact Info */
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.contact-item {
+    font-size: 0.875rem;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.contact-item a {
+    color: #3b82f6;
+    text-decoration: none;
+}
+
+.contact-item a:hover {
+    text-decoration: underline;
+}
+
+/* Scale List */
+.scale-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.scale-list li {
+    font-size: 0.85rem;
+    color: #475569;
+    padding: 0.25rem 0;
+}
+
+/* Crops Tags */
+.crops-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.crop-tag {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: #475569;
+    font-weight: 500;
+}
+
+.crop-tag.more {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+/* Actions */
+.lead-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.lead-actions .btn {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+}
+
+/* View Toggle Buttons */
+.view-toggle {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.view-toggle .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+.view-toggle .btn.active {
+    background: #3b82f6;
+    color: #fff;
+}
+
+/* Cards Container */
+.leads-cards-container {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Loading State */
+.lead-card.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Filters for Card View */
+.card-view-filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.card-view-filters select {
+    padding: 0.5rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: #fff;
+}

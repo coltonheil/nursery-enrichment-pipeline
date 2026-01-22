@@ -118,8 +118,8 @@ def enrich_lead_with_gemini(website_text, business_name, city, state):
     if not website_text or len(website_text) < 100:
         raise ValueError("Insufficient website text for analysis")
 
-    # Build the enrichment prompt
-    prompt = f"""You are analyzing a nursery/grower business website to extract key information.
+    # Build the enrichment prompt with ICP-specific signals
+    prompt = f"""You are analyzing a nursery/grower business website to determine if they are a potential buyer of bulk worm castings (vermicompost) for agricultural or horticultural use.
 
 Business Name: {business_name}
 Location: {city}, {state}
@@ -127,12 +127,56 @@ Location: {city}, {state}
 Website Content:
 {website_text[:15000]}
 
+EXTRACTION FOCUS - ICP (Ideal Customer Profile) Signals:
+
+1. GROWING MEDIA USAGE (Critical ICP Signal)
+   - Do they use soil, potting mix, or growing media in production?
+   - Container/pot production = YES
+   - Greenhouse propagation = YES
+   - Field grown non-organic = MAYBE
+   - Hydroponic/no soil = NO
+
+2. PRODUCTION METHOD (Determines soil needs)
+   - Container: potted plants, plug trays, liner production
+   - Greenhouse: heated/controlled environment growing
+   - Field: direct ground planting
+   - Hydroponic: water-based, no soil
+   - Mixed: combination of methods
+
+3. ORGANIC CERTIFICATION (Strong buying signal)
+   - Look for: "Certified Organic", USDA Organic, organic certification
+   - "Organic" in business name or prominent on site
+   - Sustainable/regenerative farming language
+
+4. SCALE INDICATORS (Volume potential - be specific!)
+   - Greenhouse square footage: "180,000 sq ft greenhouse"
+   - Number of facilities: "12 greenhouses", "4 hoop houses"
+   - Acreage under production: "100 acres in production"
+   - Production volume: "500,000 plants annually", "2 million plugs/year"
+   - Employee count if mentioned
+   - Multiple locations
+
+5. SOIL PURCHASING SIGNALS (Confirmed soil buyer)
+   - Mentions buying: potting soil, growing media, amendments, compost
+   - Mentions brands: Pro-Mix, Sungro, Berger, Fox Farm, Miracle-Gro
+   - "We mix our own soil" = HIGH priority
+   - Soil health/building soil language
+   - Any mention of vermicompost or worm castings = VERY HIGH priority
+
+6. DISQUALIFICATION SIGNALS (Red flags)
+   - Landscaping installation, lawn care, mowing services
+   - Equipment dealer, machinery sales
+   - Retail only with no growing operation
+   - Florist with no production
+   - Christmas tree farm (field grown)
+   - Sod/turf production
+
 Extract the following information and return ONLY a valid JSON object (no markdown, no explanation):
 
 {{
   "owner_name": "Full name of owner/founder if mentioned, or null",
   "email": "Contact email if found (not generic info@), or null",
-  "business_type": "Choose ONE: wholesale_nursery, retail_nursery, container_production, grower_only, garden_center, cannabis_cultivator, landscape_supplier, christmas_tree_farm, sod_farm, orchard, tree_farm, mixed, unknown",
+  "business_type": "Choose ONE: wholesale_nursery, retail_nursery, container_production, greenhouse_propagation, grower_only, garden_center, cannabis_cultivator, hemp_grower, landscape_supplier, christmas_tree_farm, sod_farm, orchard, tree_farm, microgreens_specialty, soil_mixer, farm_supply, landscaper, other, unknown",
   "is_wholesale": true/false (do they sell to trade/wholesale customers?),
   "is_retail": true/false (do they sell direct to consumers?),
   "greenhouse_sqft": "Integer square footage if mentioned, or null",
@@ -156,7 +200,15 @@ Extract the following information and return ONLY a valid JSON object (no markdo
   }},
   "appointment_only": true/false (do they require appointments?),
   "closed_weekends": true/false (are they closed both Saturday AND Sunday based on website?),
-  "confidence": "low/medium/high (your confidence in the extracted data)"
+  "confidence": "low/medium/high (your confidence in the extracted data)",
+
+  "uses_growing_media": true/false (REQUIRED: Do they use soil/potting mix/growing media in production?),
+  "production_method": "field/container/greenhouse/hydroponic/mixed/unknown (REQUIRED: Primary production method)",
+  "is_organic_certified": true/false (Are they certified organic or explicitly organic-focused?),
+  "scale_indicators": ["REQUIRED: Specific scale mentions like '12 greenhouses', '40 acres', '500k plants/year'. Empty array if none."],
+  "purchases_soil": true/false (Any mention of purchasing soil, potting mix, amendments, or brands?),
+  "soil_brands_mentioned": ["Specific brands: Pro-Mix, Sungro, Berger, Fox Farm, etc. Empty array if none."],
+  "disqualification_signals": ["REQUIRED: Red flags like 'landscaping services', 'lawn care', 'retail only', 'no growing operation'. Empty array if clean."]
 }}
 
 IMPORTANT:
@@ -202,7 +254,14 @@ Output:
   }},
   "appointment_only": true,
   "closed_weekends": false,
-  "confidence": "high"
+  "confidence": "high",
+  "uses_growing_media": true,
+  "production_method": "container",
+  "is_organic_certified": false,
+  "scale_indicators": ["45 acre wholesale nursery"],
+  "purchases_soil": false,
+  "soil_brands_mentioned": [],
+  "disqualification_signals": []
 }}
 
 Example 2 - Retail Garden Center:
@@ -235,7 +294,14 @@ Output:
   }},
   "appointment_only": false,
   "closed_weekends": false,
-  "confidence": "high"
+  "confidence": "high",
+  "uses_growing_media": false,
+  "production_method": "unknown",
+  "is_organic_certified": false,
+  "scale_indicators": [],
+  "purchases_soil": false,
+  "soil_brands_mentioned": [],
+  "disqualification_signals": ["landscaping services", "gift shop focused", "workshops (retail focus)"]
 }}
 
 Now analyze the business above and return the JSON:"""
@@ -244,10 +310,12 @@ Now analyze the business above and return the JSON:"""
     try:
         data = call_gemini(prompt)
 
-        # Validate required fields exist
+        # Validate required fields exist (including new ICP fields)
         required_fields = [
             'business_type', 'is_wholesale', 'is_retail', 'container_production',
-            'soil_relevance', 'negative_indicators', 'confidence'
+            'soil_relevance', 'negative_indicators', 'confidence',
+            # Phase 2: New ICP fields
+            'uses_growing_media', 'production_method', 'scale_indicators', 'disqualification_signals'
         ]
 
         for field in required_fields:
@@ -263,6 +331,13 @@ Now analyze the business above and return the JSON:"""
             data['size_signals'] = []
         if 'crops_grown' not in data or data['crops_grown'] is None:
             data['crops_grown'] = []
+        # Phase 2: New ICP array fields
+        if 'scale_indicators' not in data or data['scale_indicators'] is None:
+            data['scale_indicators'] = []
+        if 'soil_brands_mentioned' not in data or data['soil_brands_mentioned'] is None:
+            data['soil_brands_mentioned'] = []
+        if 'disqualification_signals' not in data or data['disqualification_signals'] is None:
+            data['disqualification_signals'] = []
 
         return data
 

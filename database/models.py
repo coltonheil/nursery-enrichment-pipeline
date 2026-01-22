@@ -399,6 +399,11 @@ def update_gemini_data(lead_id, gemini_data, raw_response=None):
     negative_indicators_json = json.dumps(gemini_data.get('negative_indicators', {}))
     raw_response_json = json.dumps(raw_response) if raw_response else json.dumps(gemini_data)
 
+    # Phase 2: New ICP field JSON arrays
+    scale_indicators_json = json.dumps(gemini_data.get('scale_indicators', []))
+    soil_brands_mentioned_json = json.dumps(gemini_data.get('soil_brands_mentioned', []))
+    disqualification_signals_json = json.dumps(gemini_data.get('disqualification_signals', []))
+
     cursor.execute('''
         UPDATE leads
         SET owner_name = ?,
@@ -420,7 +425,14 @@ def update_gemini_data(lead_id, gemini_data, raw_response=None):
             gemini_raw_response = ?,
             gemini_enriched_at = CURRENT_TIMESTAMP,
             gemini_status = 'enriched',
-            gemini_error = NULL
+            gemini_error = NULL,
+            uses_growing_media = ?,
+            production_method = ?,
+            is_organic_certified = ?,
+            scale_indicators = ?,
+            purchases_soil = ?,
+            soil_brands_mentioned = ?,
+            disqualification_signals = ?
         WHERE id = ?
     ''', (
         gemini_data.get('owner_name'),
@@ -440,6 +452,14 @@ def update_gemini_data(lead_id, gemini_data, raw_response=None):
         gemini_data.get('appointment_only'),
         gemini_data.get('confidence'),
         raw_response_json,
+        # Phase 2: New ICP fields
+        gemini_data.get('uses_growing_media'),
+        gemini_data.get('production_method'),
+        gemini_data.get('is_organic_certified'),
+        scale_indicators_json,
+        gemini_data.get('purchases_soil'),
+        soil_brands_mentioned_json,
+        disqualification_signals_json,
         lead_id
     ))
 

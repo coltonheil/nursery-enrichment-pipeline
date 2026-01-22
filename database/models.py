@@ -129,7 +129,18 @@ def migrate_db():
         ('custom_line', 'TEXT'),  # Generated first line for email
         ('email_angle', 'TEXT'),  # organic/wholesale/cannabis/etc
         ('personalization_status', 'TEXT DEFAULT "pending"'),  # pending/generated/failed
-        ('personalization_generated_at', 'TIMESTAMP')
+        ('personalization_generated_at', 'TIMESTAMP'),
+        # Phase 1: ICP-specific enrichment columns
+        ('uses_growing_media', 'BOOLEAN DEFAULT NULL'),  # Core ICP signal
+        ('production_method', 'TEXT DEFAULT NULL'),  # field/container/greenhouse/hydroponic/mixed
+        ('is_organic_certified', 'BOOLEAN DEFAULT NULL'),  # Organic certification detected
+        ('scale_indicators', 'TEXT DEFAULT NULL'),  # JSON array: ["12 greenhouses", "40 acres"]
+        ('purchases_soil', 'BOOLEAN DEFAULT NULL'),  # Explicit mention of buying potting mix
+        ('soil_brands_mentioned', 'TEXT DEFAULT NULL'),  # JSON array: ["Pro-Mix", "Sungro"]
+        ('disqualification_signals', 'TEXT DEFAULT NULL'),  # JSON array: ["landscaping", "lawn care"]
+        ('geo_score', 'INTEGER DEFAULT 0'),  # Geographic proximity score
+        ('icp_qualified', 'BOOLEAN DEFAULT NULL'),  # Passed ICP qualification gate
+        ('icp_type', 'TEXT DEFAULT NULL')  # primary/secondary/tertiary/disqualified
     ]
 
     migrations_applied = False

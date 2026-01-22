@@ -786,12 +786,20 @@ def calculate_score(lead) -> dict:
 
 def assign_tier(score: int, icp_type: str) -> str:
     """
-    Assign tier based on score and ICP type.
+    Assign tier based on ICP qualification and score.
 
-    New tier thresholds (Phase 3):
-    - Tier A: 70+ points (top prospects)
-    - Tier B: 40-69 points (qualified leads)
-    - Tier C: < 40 points OR disqualified
+    Philosophy: ICP qualification is the primary filter. The tier system
+    separates qualified leads by score, not by qualification.
+
+    Tier logic:
+    - Tier A: ICP qualified + strong signals (40+ points)
+    - Tier B: ICP qualified (any score) - meets core business criteria
+    - Tier C: ICP disqualified - doesn't use/resell growing media
+
+    Target distribution (~90 enriched leads):
+    - Tier A: ~10% (hot prospects with multiple positive signals)
+    - Tier B: ~25-30% (qualified, may need nurturing)
+    - Tier C: ~60-65% (wrong business model)
 
     Args:
         score: Total score (integer)
@@ -804,13 +812,12 @@ def assign_tier(score: int, icp_type: str) -> str:
     if icp_type == "disqualified":
         return 'C'
 
-    # Score-based tiers for qualified leads
-    if score >= 70:
+    # All ICP-qualified leads get at least Tier B
+    # Only score determines A vs B
+    if score >= 40:
         return 'A'
-    elif score >= 40:
-        return 'B'
     else:
-        return 'C'
+        return 'B'
 
 # ============================================================================
 # TEST FUNCTION
@@ -943,10 +950,10 @@ def test_scorer():
     print("ICP-Based Scoring Engine tests complete!")
     print()
     print("Key Features:")
-    print("- [X] ICP qualification gate (must pass to score above Tier C)")
+    print("- [X] ICP qualification is primary filter (qualified = Tier B minimum)")
     print("- [X] Sample requester insights (organic, farm, growers, hemp)")
     print("- [X] Geographic proximity scoring (WI: +25, Regional: +20, Far: -5)")
-    print("- [X] New tier thresholds (A: 70+, B: 40-69, C: <40 or disqualified)")
+    print("- [X] Tier assignment: A=40+ pts, B=ICP qualified, C=disqualified")
     print("- [X] Disqualification signals enforced")
     print("- [X] State extraction from address strings")
 

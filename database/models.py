@@ -527,7 +527,7 @@ def update_lead_score(lead_id, score_data):
 
     Args:
         lead_id: The lead ID
-        score_data: Dict with keys: total, signals, tier, has_data
+        score_data: Dict with keys: total, signals, tier, has_data, icp_qualified, icp_type, geo_score
     """
     import json
 
@@ -548,9 +548,20 @@ def update_lead_score(lead_id, score_data):
         SET score = ?,
             score_breakdown = ?,
             tier = ?,
+            icp_qualified = ?,
+            icp_type = ?,
+            geo_score = ?,
             scored_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    ''', (score_data['total'], breakdown_json, score_data['tier'], lead_id))
+    ''', (
+        score_data['total'],
+        breakdown_json,
+        score_data['tier'],
+        score_data.get('icp_qualified'),
+        score_data.get('icp_type'),
+        score_data.get('geo_score', 0),
+        lead_id
+    ))
 
     conn.commit()
     conn.close()

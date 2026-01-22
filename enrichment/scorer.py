@@ -43,6 +43,68 @@ DISQUALIFIED_BUSINESS_TYPES = [
 ]
 
 # ============================================================================
+# GEOGRAPHIC SCORING CONSTANTS (Phase 4)
+# ============================================================================
+
+# Based on Wisconsin shipping logistics
+# 100% of sample requesters were in Wisconsin
+GEO_TIERS = {
+    # Local - same state (100% of sample requesters)
+    "WI": 25,
+
+    # Regional - day-trip freight zone
+    "IL": 20,  # Illinois (Chicago metro access)
+    "MN": 20,  # Minnesota (Twin Cities)
+    "IA": 20,  # Iowa (direct border)
+    "MI": 20,  # Michigan (Upper Peninsula proximity)
+
+    # Near - 2-day freight, manageable cost
+    "IN": 10,  # Indiana
+    "OH": 10,  # Ohio
+    "MO": 10,  # Missouri
+    "NE": 10,  # Nebraska
+    "KY": 10,  # Kentucky
+
+    # Mid - no modifier (viable but neutral)
+    "ND": 0, "SD": 0, "KS": 0, "TN": 0,
+    "WV": 0, "PA": 0, "NY": 0, "AR": 0,
+    "VA": 0, "MT": 0, "WY": 0, "ID": 0,
+    "UT": 0, "NV": 0, "OK": 0,
+
+    # Far - higher shipping cost, still viable
+    "TX": -5, "CO": -5, "CA": -5, "FL": -5,
+    "AZ": -5, "NM": -5, "NC": -5, "SC": -5,
+    "GA": -5, "AL": -5, "MS": -5, "LA": -5,
+    "OR": -5, "WA": -5, "ME": -5, "NH": -5,
+    "VT": -5, "MA": -5, "RI": -5, "CT": -5,
+    "NJ": -5, "DE": -5, "MD": -5, "DC": -5,
+    "AK": -5, "HI": -5,
+}
+
+# Default for unlisted states or territories
+GEO_DEFAULT_SCORE = -5
+
+# Full state name to abbreviation mapping
+STATE_NAMES_TO_ABBR = {
+    "WISCONSIN": "WI", "ILLINOIS": "IL", "MINNESOTA": "MN",
+    "IOWA": "IA", "MICHIGAN": "MI", "INDIANA": "IN",
+    "OHIO": "OH", "MISSOURI": "MO", "NEBRASKA": "NE",
+    "KENTUCKY": "KY", "TEXAS": "TX", "COLORADO": "CO",
+    "CALIFORNIA": "CA", "FLORIDA": "FL", "ARIZONA": "AZ",
+    "NEW MEXICO": "NM", "NORTH CAROLINA": "NC", "SOUTH CAROLINA": "SC",
+    "GEORGIA": "GA", "ALABAMA": "AL", "MISSISSIPPI": "MS",
+    "LOUISIANA": "LA", "NORTH DAKOTA": "ND", "SOUTH DAKOTA": "SD",
+    "KANSAS": "KS", "TENNESSEE": "TN", "WEST VIRGINIA": "WV",
+    "PENNSYLVANIA": "PA", "NEW YORK": "NY", "ARKANSAS": "AR",
+    "VIRGINIA": "VA", "MONTANA": "MT", "WYOMING": "WY",
+    "IDAHO": "ID", "UTAH": "UT", "NEVADA": "NV", "OKLAHOMA": "OK",
+    "OREGON": "OR", "WASHINGTON": "WA", "MAINE": "ME",
+    "NEW HAMPSHIRE": "NH", "VERMONT": "VT", "MASSACHUSETTS": "MA",
+    "RHODE ISLAND": "RI", "CONNECTICUT": "CT", "NEW JERSEY": "NJ",
+    "DELAWARE": "DE", "MARYLAND": "MD", "ALASKA": "AK", "HAWAII": "HI",
+}
+
+# ============================================================================
 # SCORING RULES - Based on Sample Requester Analysis
 # ============================================================================
 
@@ -246,6 +308,120 @@ def check_icp_qualification(lead: dict) -> tuple:
     return False, "disqualified"
 
 # ============================================================================
+# GEOGRAPHIC SCORING FUNCTIONS (Phase 4)
+# ============================================================================
+
+def normalize_state(state: str) -> str:
+    """
+    Convert state name or abbreviation to 2-letter code.
+
+    Args:
+        state: State name (full or abbreviated)
+
+    Returns:
+        str: 2-letter state code or None
+    """
+    if not state:
+        return None
+
+    state = state.strip().upper()
+
+    # Already 2-letter code
+    if len(state) == 2 and state.isalpha():
+        return state
+
+    # Full state name lookup
+    return STATE_NAMES_TO_ABBR.get(state, None)
+
+
+def extract_state_from_address(address: str) -> str:
+    """
+    Extract state from address string.
+
+    Handles common patterns:
+    - "City, ST 12345"
+    - "City, State"
+    - "123 Main St, City, ST"
+
+    Args:
+        address: Full address string
+
+    Returns:
+        str: 2-letter state code or None
+    """
+    if not address:
+        return None
+
+    import re
+
+    address_upper = address.upper()
+
+    # Pattern 1: 2-letter state code before zip (most common)
+    # Example: "Madison, WI 53703"
+    match = re.search(r',\s*([A-Z]{2})\s+\d{5}', address_upper)
+    if match:
+        return match.group(1)
+
+    # Pattern 2: 2-letter state code at end or before last comma
+    # Example: "123 Main St, Madison, WI"
+    match = re.search(r',\s*([A-Z]{2})\s*$', address_upper)
+    if match:
+        return match.group(1)
+
+    # Pattern 3: Full state name before zip
+    # Example: "Madison, Wisconsin 53703"
+    for state_name, state_abbr in STATE_NAMES_TO_ABBR.items():
+        if state_name in address_upper:
+            return state_abbr
+
+    return None
+
+
+def calculate_geo_score(lead: dict) -> int:
+    """
+    Calculate geographic proximity score based on state.
+
+    Tries multiple sources for state:
+    1. lead["state"] column
+    2. Parse from lead["address"]
+
+    Args:
+        lead: Lead dict or database row
+
+    Returns:
+        int: Geographic score modifier (-5 to +25)
+    """
+    # Helper to safely get lead values
+    def get_value(key, default=None):
+        if hasattr(lead, 'get'):
+            return lead.get(key, default)
+        else:
+            try:
+                return lead[key] if lead[key] is not None else default
+            except (KeyError, TypeError):
+                return default
+
+    state = get_value('state')
+
+    # Try to extract from address if state is missing
+    if not state:
+        address = get_value('address')
+        if address:
+            state = extract_state_from_address(address)
+
+    if not state:
+        return 0  # Can't determine, no modifier
+
+    # Normalize state to 2-letter code
+    state = normalize_state(state)
+
+    if not state:
+        return 0
+
+    # Return geo score from tier mapping
+    return GEO_TIERS.get(state, GEO_DEFAULT_SCORE)
+
+# ============================================================================
 # SCORING CALCULATION
 # ============================================================================
 
@@ -293,6 +469,7 @@ def calculate_score(lead) -> dict:
             'has_data': False,
             'icp_qualified': False,
             'icp_type': 'disqualified',
+            'geo_score': 0,  # Phase 4: No geo score for leads without data
             'reason': 'No website or enrichment data available'
         }
 
@@ -312,7 +489,8 @@ def calculate_score(lead) -> dict:
             'tier': 'C',
             'has_data': True,
             'icp_qualified': False,
-            'icp_type': icp_type
+            'icp_type': icp_type,
+            'geo_score': 0  # Phase 4: No geo score for disqualified leads
         }
 
     # === SCORE QUALIFIED LEADS ===
@@ -402,16 +580,30 @@ def calculate_score(lead) -> dict:
         })
         total_score += SCORING_RULES['hemp_cannabis']['points']
 
-    # Wisconsin location (100% of sample requesters)
-    state = get_value('state', '')
-    if state and state.upper() == 'WI':
+    # === GEOGRAPHIC PROXIMITY (Phase 4) ===
+    # Calculate geo score based on state proximity to Wisconsin
+    geo_score = calculate_geo_score(lead)
+    if geo_score != 0:
+        state = get_value('state', '')
+        if not state:
+            address = get_value('address', '')
+            if address:
+                state = extract_state_from_address(address)
+
+        state_display = normalize_state(state) if state else "Unknown"
+
+        if geo_score > 0:
+            description = f"Geographic proximity: {state_display} (+{geo_score} pts)"
+        else:
+            description = f"Geographic proximity: {state_display} ({geo_score} pts)"
+
         signals.append({
-            'signal': 'wisconsin_location',
-            'points': SCORING_RULES['wisconsin_location']['points'],
-            'value': True,
-            'description': SCORING_RULES['wisconsin_location']['description']
+            'signal': 'geographic_proximity',
+            'points': geo_score,
+            'value': state_display,
+            'description': description
         })
-        total_score += SCORING_RULES['wisconsin_location']['points']
+        total_score += geo_score
 
     # Wholesale operation
     if get_value('is_wholesale') == True:
@@ -584,7 +776,8 @@ def calculate_score(lead) -> dict:
         'tier': tier,
         'has_data': True,
         'icp_qualified': icp_qualified,
-        'icp_type': icp_type
+        'icp_type': icp_type,
+        'geo_score': geo_score  # Phase 4: Geographic proximity score
     }
 
 # ============================================================================
@@ -624,9 +817,9 @@ def assign_tier(score: int, icp_type: str) -> str:
 # ============================================================================
 
 def test_scorer():
-    """Test the new ICP-based scoring function."""
+    """Test the ICP-based scoring function with geographic intelligence."""
 
-    print("Testing ICP-Based Scoring Engine (Phase 3)")
+    print("Testing ICP-Based Scoring Engine (Phase 4 - With Geographic Intelligence)")
     print("=" * 80)
     print()
 
@@ -715,22 +908,47 @@ def test_scorer():
     }
 
     result_3 = calculate_score(test_lead_3)
-    print("Test 3: Organic Field Farm (Expected: Tier B or C - Tertiary ICP)")
+    print("Test 3: Organic Field Farm in Iowa (Expected: Tier B or C - Tertiary ICP, +20 geo)")
     print(f"ICP Qualified: {result_3['icp_qualified']}")
     print(f"ICP Type: {result_3['icp_type']}")
     print(f"Score: {result_3['total']}")
+    print(f"Geo Score: {result_3['geo_score']}")
     print(f"Tier: {result_3['tier']}")
     for signal in result_3['signals']:
         print(f"  {signal['signal']}: {signal['points']} points")
     print()
 
+    # Test case 4: GEOGRAPHIC SCORING TEST
+    print("Test 4: Geographic Scoring Validation")
+    print("-" * 40)
+    geo_test_cases = [
+        {"name": "Wisconsin (Local)", "state": "WI", "expected": 25},
+        {"name": "Illinois (Regional)", "state": "IL", "expected": 20},
+        {"name": "Minnesota (Regional)", "state": "MN", "expected": 20},
+        {"name": "Indiana (Near)", "state": "IN", "expected": 10},
+        {"name": "Kansas (Mid)", "state": "KS", "expected": 0},
+        {"name": "Texas (Far)", "state": "TX", "expected": -5},
+        {"name": "California (Far)", "state": "CA", "expected": -5},
+        {"name": "No State", "state": None, "expected": 0},
+        {"name": "From Address", "state": None, "address": "123 Main St, Madison, WI 53703", "expected": 25},
+    ]
+
+    for test in geo_test_cases:
+        lead = {'state': test.get('state'), 'address': test.get('address')}
+        score = calculate_geo_score(lead)
+        status = "PASS" if score == test['expected'] else "FAIL"
+        print(f"  [{status}] {test['name']}: {score} (expected: {test['expected']})")
+    print()
+
     print("ICP-Based Scoring Engine tests complete!")
     print()
-    print("Key Changes from Phase 2:")
+    print("Key Features:")
     print("- [X] ICP qualification gate (must pass to score above Tier C)")
-    print("- [X] Sample requester insights (organic, farm, growers, hemp, Wisconsin)")
+    print("- [X] Sample requester insights (organic, farm, growers, hemp)")
+    print("- [X] Geographic proximity scoring (WI: +25, Regional: +20, Far: -5)")
     print("- [X] New tier thresholds (A: 70+, B: 40-69, C: <40 or disqualified)")
     print("- [X] Disqualification signals enforced")
+    print("- [X] State extraction from address strings")
 
 if __name__ == '__main__':
     test_scorer()

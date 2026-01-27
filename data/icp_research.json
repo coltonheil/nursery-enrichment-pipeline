@@ -1,0 +1,255 @@
+{
+  "metadata": {
+    "date": "2026-01-24",
+    "version": "2.0",
+    "total_sample_requesters": 41,
+    "companies_researched": 11,
+    "researcher": "Claude Code Autonomous Research"
+  },
+  "sample_requesters": [
+    {
+      "business_name": "Driftless Organics",
+      "city": "Soldiers Grove",
+      "state": "WI",
+      "website": "https://www.driftlessorganics.com/",
+      "research_findings": {
+        "business_type": "Organic vegetable farm",
+        "crops_grown": ["potatoes", "root vegetables", "sunflowers", "small grains"],
+        "scale": "100+ acres, diversified production",
+        "production_method": "Field production (organic)",
+        "organic_status": "Certified Organic (Real Organic Project)",
+        "wholesale_retail": "60% wholesale/retail/restaurant, 30% CSA, 10% farmers market",
+        "soil_media_mentions": "Organic farm focused on soil health"
+      },
+      "icp_signals_detected": ["organic_certified", "wholesale_focus", "wisconsin_based", "farm_in_name", "large_scale"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "McKay Nursery Company",
+      "city": "Oregon",
+      "state": "WI",
+      "website": "https://www.mckaynursery.com/",
+      "research_findings": {
+        "business_type": "Wholesale nursery with retail",
+        "crops_grown": ["trees", "shrubs", "perennials", "evergreens", "native plants"],
+        "scale": "1500-2000 acres, 51-200 employees, largest nursery in Wisconsin",
+        "production_method": "Container and field production",
+        "organic_status": "Sustainable practices",
+        "wholesale_retail": "Wholesale primary, retail garden centers",
+        "soil_media_mentions": "Container growing operation"
+      },
+      "icp_signals_detected": ["largest_in_category", "wholesale_focus", "container_production", "wisconsin_based", "huge_scale", "employee_owned"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Heritage Flower Farm, LLC",
+      "city": "Mukwonago",
+      "state": "WI",
+      "website": "https://www.heritageflowerfarm.com/",
+      "research_findings": {
+        "business_type": "Specialty heirloom perennial nursery",
+        "crops_grown": ["heirloom perennials", "biennials", "annuals"],
+        "scale": "1000+ varieties, seed starting operation",
+        "production_method": "Seed starting, container production",
+        "organic_status": "Sustainable/heirloom focus",
+        "wholesale_retail": "Retail with wholesale availability",
+        "soil_media_mentions": "Grows most plants from seed"
+      },
+      "icp_signals_detected": ["container_production", "wisconsin_based", "specialty_grower", "seed_starting"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Wagner Greenhouses",
+      "city": "Minneapolis",
+      "state": "MN",
+      "website": "https://www.wagnergreenhouses.com/",
+      "research_findings": {
+        "business_type": "Wholesale plug/liner supplier with retail",
+        "crops_grown": ["bedding plugs", "pansy plugs", "cyclamen liners", "poinsettias", "annuals", "perennials"],
+        "scale": "250,000 sq ft greenhouse (Hugo), 125 years in business, 5th generation",
+        "production_method": "Greenhouse container production",
+        "organic_status": "Conventional",
+        "wholesale_retail": "National wholesale supplier, local retail",
+        "soil_media_mentions": "Plug and liner production requires growing media"
+      },
+      "icp_signals_detected": ["greenhouse_production", "wholesale_focus", "huge_scale", "multi_generational", "plug_producer", "neighboring_state"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Badger Boyz Greenhouses, LLC",
+      "city": "Appleton",
+      "state": "WI",
+      "website": null,
+      "research_findings": {
+        "business_type": "Wholesale perennial greenhouse",
+        "crops_grown": ["perennials"],
+        "scale": "10,000 sq ft greenhouse, single owner operation",
+        "production_method": "Greenhouse container production",
+        "organic_status": "Unknown",
+        "wholesale_retail": "Wholesale primary",
+        "soil_media_mentions": "Container growing operation"
+      },
+      "icp_signals_detected": ["greenhouse_production", "wholesale_focus", "container_production", "wisconsin_based", "growers_in_name"],
+      "confidence": "medium"
+    },
+    {
+      "business_name": "David J. Frank Landscape Contracting Inc.",
+      "city": "Germantown",
+      "state": "WI",
+      "website": "https://davidjfrank.com/",
+      "research_findings": {
+        "business_type": "Landscape contracting with interiorscapes",
+        "crops_grown": [],
+        "scale": "Largest landscape contractor in Wisconsin, 66 years in business, multiple locations",
+        "production_method": "Services (landscape installation, interiorscapes)",
+        "organic_status": "Unknown",
+        "wholesale_retail": "B2B services",
+        "soil_media_mentions": "Interiorscapes division may use growing media"
+      },
+      "icp_signals_detected": ["largest_in_category", "wisconsin_based", "interiorscapes", "huge_scale"],
+      "icp_exception_notes": "Landscaper that requested samples - has interiorscapes division which likely uses growing media for indoor plants",
+      "confidence": "medium"
+    },
+    {
+      "business_name": "Future Farm Hemp",
+      "city": "Baldwin",
+      "state": "WI",
+      "website": "https://www.futurefarmhemp.com",
+      "research_findings": {
+        "business_type": "Hemp seedling producer / CBD company",
+        "crops_grown": ["hemp", "CBD products"],
+        "scale": "11-50 employees, vertically integrated",
+        "production_method": "Seedling production (started with hydroponics)",
+        "organic_status": "Organic focus",
+        "wholesale_retail": "Wholesale seedlings and distribution",
+        "soil_media_mentions": "Seedling production, originally hydroponic greens"
+      },
+      "icp_signals_detected": ["hemp_cannabis", "wholesale_focus", "wisconsin_based", "seedling_producer"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Vitruvian Farms",
+      "city": "McFarland",
+      "state": "WI",
+      "website": "https://www.vitruvianfarms.com/",
+      "research_findings": {
+        "business_type": "Certified organic microgreens and mushroom farm",
+        "crops_grown": ["microgreens", "mushrooms", "leafy greens"],
+        "scale": "45 acres, 7 acres farmed, hoop houses, heated greenhouse",
+        "production_method": "Greenhouse/hoop house, microgreens grown in soil trays",
+        "organic_status": "Certified Organic",
+        "wholesale_retail": "Wholesale to 50+ restaurants",
+        "soil_media_mentions": "Microgreens grown in soil in trays - HIGH volume soil/media user"
+      },
+      "icp_signals_detected": ["organic_certified", "greenhouse_production", "microgreens_operation", "wholesale_focus", "wisconsin_based", "uses_growing_media"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Little Sweet Flower Farm, LLC",
+      "city": "Larsen",
+      "state": "WI",
+      "website": "https://www.littlesweetflowerfarm.com/",
+      "research_findings": {
+        "business_type": "Cut flower farm and native plant nursery",
+        "crops_grown": ["cut flowers", "native pollinator plants"],
+        "scale": "Small-scale, expanding (recently bought land)",
+        "production_method": "Field and container production",
+        "organic_status": "Chemical-free, sustainable practices",
+        "wholesale_retail": "Retail via pop-ups, markets, CSA",
+        "soil_media_mentions": "Native plant nursery, sustainable practices"
+      },
+      "icp_signals_detected": ["organic_focus", "container_production", "wisconsin_based", "farm_in_name", "native_plants"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Donahue's Greenhouse",
+      "city": "Faribault",
+      "state": "MN",
+      "website": "https://donahuesclematis.com/",
+      "research_findings": {
+        "business_type": "Specialty greenhouse - clematis and bedding plants",
+        "crops_grown": ["clematis", "hanging baskets", "Proven Winner plants", "annuals"],
+        "scale": "One of largest clematis growers in US, 52 years in business",
+        "production_method": "Greenhouse container production",
+        "organic_status": "Conventional",
+        "wholesale_retail": "Wholesale with retail store",
+        "soil_media_mentions": "Container growing operation"
+      },
+      "icp_signals_detected": ["greenhouse_production", "wholesale_focus", "largest_in_category", "neighboring_state", "multi_generational", "greenhouse_in_name"],
+      "confidence": "high"
+    },
+    {
+      "business_name": "Pahl's Market",
+      "city": "Apple Valley",
+      "state": "MN",
+      "website": "https://www.pahls.com/",
+      "research_findings": {
+        "business_type": "Garden center with greenhouse production",
+        "crops_grown": ["annuals", "perennials", "hanging baskets", "produce"],
+        "scale": "16 acres, 6th generation family business, started in early 1900s",
+        "production_method": "Greenhouse production",
+        "organic_status": "Homegrown focus",
+        "wholesale_retail": "Retail garden center with on-site production",
+        "soil_media_mentions": "Growing operation for retail sales"
+      },
+      "icp_signals_detected": ["greenhouse_production", "wisconsin_based", "multi_generational", "large_scale"],
+      "confidence": "high"
+    }
+  ],
+  "pattern_analysis": {
+    "signal_frequencies": {
+      "greenhouse_container_production": {"count": 9, "percentage": 82, "notes": "Primary ICP signal - most buyers grow in containers/greenhouse"},
+      "wholesale_focus": {"count": 8, "percentage": 73, "notes": "B2B operations are primary buyers"},
+      "scale_indicators_present": {"count": 10, "percentage": 91, "notes": "Almost all buyers have measurable scale"},
+      "organic_sustainable_focus": {"count": 5, "percentage": 45, "notes": "Strong correlation but not required"},
+      "wisconsin_location": {"count": 8, "percentage": 73, "notes": "Primary market"},
+      "minnesota_location": {"count": 3, "percentage": 27, "notes": "Secondary market, still strong"},
+      "multi_generational_business": {"count": 4, "percentage": 36, "notes": "Stability indicator"},
+      "farm_greenhouse_organic_in_name": {"count": 9, "percentage": 82, "notes": "Naming pattern correlates with ICP fit"},
+      "hemp_cannabis": {"count": 1, "percentage": 9, "notes": "Small but valuable segment"},
+      "landscaping_business": {"count": 1, "percentage": 9, "notes": "Exception: largest in WI with interiorscapes"}
+    },
+    "business_type_distribution": {
+      "wholesale_nursery_greenhouse": 4,
+      "organic_farm": 2,
+      "specialty_grower": 2,
+      "garden_center_with_production": 2,
+      "landscape_contractor": 1
+    },
+    "key_differentiators": [
+      "Production operation (not retail-only)",
+      "Container/greenhouse growing method",
+      "Wholesale or mixed business model",
+      "Measurable scale (acreage, sq ft, employees)",
+      "Wisconsin or neighboring state location"
+    ]
+  },
+  "scoring_recommendations": {
+    "increase_weight": [
+      {"signal": "greenhouse_production", "current": 25, "recommended": 35, "reason": "82% of buyers have greenhouse/container"},
+      {"signal": "uses_growing_media", "current": 20, "recommended": 30, "reason": "Core ICP signal"},
+      {"signal": "is_wholesale", "current": 20, "recommended": 30, "reason": "73% of buyers are wholesale"},
+      {"signal": "large_scale", "current": 15, "recommended": 25, "reason": "91% have scale indicators"}
+    ],
+    "add_new_signals": [
+      {"signal": "microgreens_operation", "points": 35, "reason": "Vitruvian Farms example - high volume soil user"},
+      {"signal": "plug_liner_producer", "points": 30, "reason": "Wagner example - huge growing media consumption"},
+      {"signal": "multi_generational_business", "points": 10, "reason": "36% of buyers, stability indicator"},
+      {"signal": "largest_in_category", "points": 20, "reason": "McKay, Wagner, Donahue examples"},
+      {"signal": "seedling_producer", "points": 25, "reason": "Future Farm Hemp example"}
+    ],
+    "modify_penalties": [
+      {"signal": "landscaping_services", "current": -50, "recommended": -30, "condition": "Reduce if has interiorscapes or large scale", "reason": "David J. Frank exception - largest WI landscaper requested samples"}
+    ],
+    "tier_thresholds": {
+      "tier_a": {"min_score": 50, "notes": "Raise from 40 to be more selective"},
+      "tier_b": {"min_score": 25, "notes": "ICP qualified with some signals"},
+      "tier_c": {"min_score": 0, "notes": "Disqualified or minimal signals"}
+    }
+  },
+  "validation_targets": {
+    "sample_requester_tier_ab_rate": "100%",
+    "tier_a_reduction_target": "30-50%",
+    "spot_check_pass_rate": "80%"
+  }
+}

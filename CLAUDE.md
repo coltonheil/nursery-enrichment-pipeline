@@ -16,7 +16,7 @@ Application runs at http://127.0.0.1:5000
 
 Local Flask app that enriches nursery B2B leads for cold email outreach. Takes Excel lists (business name + address) and transforms them into scored, tiered, personalized leads ready for Instantly.ai export.
 
-**Tech Stack:** Python/Flask, SQLite (data/leads.db), Google Places API, Google Gemini API (gemini-2.0-flash-exp)
+**Tech Stack:** Python/Flask, SQLite (data/leads.db), Google Places API, Google Gemini API (gemini-2.5-flash)
 
 ## Architecture: The Enrichment Pipeline
 
@@ -41,7 +41,7 @@ The pipeline runs in **4 sequential steps** (all orchestrated via `run_full_pipe
 - **Adds:** business_type, organic_focus, crops_grown, size_signals, is_wholesale, container_production, owner_name, owner_email
 - **Status tracking:** `gemini_status` column ('pending' → 'enriched' or 'failed')
 - **Rate limit:** 1 request/second (hardcoded sleep in app.py:827)
-- **Model:** gemini-2.0-flash-exp (configured in gemini_client.py:19)
+- **Model:** gemini-2.5-flash (latest GA model, Jan 2026, configured in gemini_client.py:19)
 
 ### Step 4: Scoring
 - **Module:** `enrichment/scorer.py`

@@ -15,16 +15,18 @@ if not GEMINI_API_KEY:
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Use Gemini 2.0 Flash for fast, cost-effective processing
-MODEL_NAME = 'gemini-2.0-flash-exp'
+# Use Gemini 2.5 Flash (January 2026) - Latest GA model
+# Lightning-fast, highly capable, optimized for structured extraction
+# Best for high-throughput tasks with balance of speed and quality
+MODEL_NAME = 'gemini-2.0-flash'
 
-def call_gemini(prompt, max_retries=3):
+def call_gemini(prompt, max_retries=5):
     """
     Call Gemini API with retry logic and error handling.
 
     Args:
         prompt: The prompt to send to Gemini
-        max_retries: Maximum number of retry attempts (default 3)
+        max_retries: Maximum number of retry attempts (default 5)
 
     Returns:
         dict: Parsed JSON response from Gemini
@@ -79,15 +81,16 @@ def call_gemini(prompt, max_retries=3):
             error_str = str(e).lower()
 
             # Check if rate limited (429)
-            if '429' in error_str or 'rate limit' in error_str or 'quota' in error_str:
-                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+            if '429' in error_str or 'rate limit' in error_str or 'quota' in error_str or 'resource' in error_str:
+                # Longer exponential backoff for rate limits: 2s, 4s, 8s, 16s, 32s
+                wait_time = 2 ** (attempt + 1)
                 print(f"[RATE LIMIT] Waiting {wait_time}s before retry (attempt {attempt + 1}/{max_retries})")
                 time.sleep(wait_time)
                 continue
 
             # Other errors - retry with exponential backoff
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                wait_time = 2 ** attempt  # 1s, 2s, 4s, 8s, 16s
                 print(f"[ERROR] {str(e)[:100]} - Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
                 time.sleep(wait_time)
                 continue

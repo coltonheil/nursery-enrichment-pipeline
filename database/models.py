@@ -144,7 +144,19 @@ def migrate_db():
         # Phase 5: Re-enrichment tracking columns
         ('re_enrichment_status', 'TEXT DEFAULT "pending"'),  # pending/completed/failed/skipped
         ('re_enriched_at', 'TIMESTAMP DEFAULT NULL'),  # When re-enrichment completed
-        ('rescored_at', 'TIMESTAMP DEFAULT NULL')  # When rescored with new model
+        ('rescored_at', 'TIMESTAMP DEFAULT NULL'),  # When rescored with new model
+        # Phase 10: Email Hunter columns
+        ('email_source', 'TEXT DEFAULT NULL'),  # gemini/scraped/pattern/api
+        ('email_verification', 'TEXT DEFAULT NULL'),  # valid/invalid/risky/catch_all/unknown
+        ('email_confidence', 'INTEGER DEFAULT NULL'),  # 0-100 confidence score
+        ('email_found_at', 'TIMESTAMP DEFAULT NULL'),  # When email was discovered
+        ('domain_is_catchall', 'BOOLEAN DEFAULT NULL'),  # Domain accepts all emails
+        ('email_pattern', 'TEXT DEFAULT NULL'),  # Detected pattern: first.last, first, flast, etc.
+        ('email_hunter_status', 'TEXT DEFAULT "pending"'),  # pending/completed/failed/skipped
+        ('email_hunter_error', 'TEXT DEFAULT NULL'),  # Error message if failed
+        ('contact_email', 'TEXT DEFAULT NULL'),  # Secondary contact (sales manager, etc.)
+        ('generic_email', 'TEXT DEFAULT NULL'),  # Fallback: info@, contact@, sales@
+        ('contact_form_url', 'TEXT DEFAULT NULL')  # Last resort: web form URL
     ]
 
     migrations_applied = False
@@ -177,6 +189,40 @@ def migrate_db():
         )
     """)
     print("Pipeline runs table created (Phase 9)")
+
+    # Phase 10: Email Hunter tables
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS email_candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL,
+            email TEXT NOT NULL,
+            source TEXT NOT NULL,
+            pattern_type TEXT,
+            verification_status TEXT,
+            verification_date TIMESTAMP,
+            confidence INTEGER,
+            selected BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lead_id) REFERENCES leads(id)
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS domain_patterns (
+            domain TEXT PRIMARY KEY,
+            detected_pattern TEXT,
+            is_catchall BOOLEAN,
+            sample_emails TEXT,
+            checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_email_candidates_lead
+        ON email_candidates(lead_id)
+    """)
+    
+    print("Email Hunter tables created (Phase 10)")
 
     conn.commit()
     conn.close()

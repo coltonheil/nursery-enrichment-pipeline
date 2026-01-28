@@ -10,6 +10,7 @@ from enrichment.google_places import enrich_business
 from enrichment.web_scraper import scrape_and_extract
 from enrichment.gemini_client import enrich_lead_with_gemini, generate_personalization
 from enrichment.scorer import calculate_score, calculate_geo_score
+from enrichment.email_hunter import hunt_email
 from exporters.instantly_exporter import export_to_csv, export_to_excel, get_export_filename
 
 app = Flask(__name__)
@@ -612,10 +613,10 @@ def run_full_pipeline(batch_size):
         pipeline_state['completed_steps'] = 3
 
         # ============================================================
-        # STEP 4: Scoring
+        # STEP 4: Email Hunting & Scoring
         # ============================================================
-        pipeline_state['current_step'] = 'scoring'
-        pipeline_state['status_message'] = f'Step 4/4: Scoring leads'
+        pipeline_state['current_step'] = 'email_and_scoring'
+        pipeline_state['status_message'] = f'Step 4/4: Email hunting & scoring leads'
         pipeline_state['step_progress'] = 0
 
         # Score all the leads in the batch
@@ -633,6 +634,47 @@ def run_full_pipeline(batch_size):
                 return
 
             try:
+                # Hunt for email if we have owner name and website
+                if lead.get('owner_name') and lead.get('website'):
+                    try:
+                        email_result = hunt_email(
+                            owner_name=lead['owner_name'],
+                            business_name=lead['business_name'],
+                            website=lead['website'],
+                            enable_web_search=True,  # 3-layer fallback enabled
+                            verify_mx=True
+                        )
+                        
+                        # Update lead with email results
+                        conn = get_db_connection()
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE leads
+                            SET owner_email = ?,
+                                email_confidence = ?,
+                                email_method = ?,
+                                generic_email = ?,
+                                contact_form_url = ?
+                            WHERE id = ?
+                        ''', (
+                            email_result.email,
+                            email_result.confidence,
+                            email_result.method,
+                            email_result.generic_email,
+                            email_result.contact_form_url,
+                            lead['id']
+                        ))
+                        conn.commit()
+                        conn.close()
+                        
+                        if email_result.email:
+                            log_action(lead['id'], 'email_found', f"Email: {email_result.email} ({email_result.confidence}% via {email_result.method})")
+                        else:
+                            log_action(lead['id'], 'email_not_found', f"No email found: {email_result.error or 'Unknown reason'}")
+                    except Exception as e:
+                        log_action(lead['id'], 'email_error', str(e)[:200])
+                
+                # Score the lead
                 score_data = calculate_score(lead)
                 update_lead_score(lead['id'], score_data)
                 log_action(lead['id'], 'scored', f"Scored {score_data['total']} points, Tier {score_data['tier']}")
@@ -1280,6 +1322,45 @@ def api_tier_distribution():
     try:
         distribution = get_tier_distribution()
         return jsonify(distribution)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stats')
+def api_stats():
+    """Get overall lead statistics."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get counts
+        cursor.execute("SELECT COUNT(*) FROM leads")
+        total = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM leads WHERE tier = 'A'")
+        tier_a = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM leads WHERE tier = 'B'")
+        tier_b = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM leads WHERE tier = 'C'")
+        tier_c = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM leads WHERE tier = 'U' OR tier IS NULL")
+        tier_u = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM leads WHERE owner_email IS NOT NULL AND owner_email != ''")
+        with_email = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return jsonify({
+            'total_leads': total,
+            'tier_a': tier_a,
+            'tier_b': tier_b,
+            'tier_c': tier_c,
+            'tier_u': tier_u,
+            'with_email': with_email
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

@@ -178,6 +178,9 @@ Extract the following information and return ONLY a valid JSON object (no markdo
 
 {{
   "owner_name": "Full name of owner/founder if mentioned, or null",
+  "contact_name": "REQUIRED: Full name of ANY relevant contact who would purchase bulk growing media. Priority order: 1) Owner/President, 2) Operations Manager, 3) Head Grower, 4) Purchasing Manager, 5) Propagation Manager, 6) Greenhouse Manager, 7) Sales/Marketing. Return first match found, or null if none.",
+  "contact_title": "The role/title of contact_name (e.g., 'Operations Manager', 'Head Grower', 'Owner'), or null",
+  "contact_priority": "Integer 1-7 indicating which priority level (1=Owner, 2=Ops Mgr, 3=Grower, 4=Purchasing, 5=Propagation, 6=Greenhouse, 7=Sales/Marketing), or null",
   "email": "Contact email if found (not generic info@), or null",
   "business_type": "Choose ONE: wholesale_nursery, retail_nursery, container_production, greenhouse_propagation, grower_only, garden_center, cannabis_cultivator, hemp_grower, landscape_supplier, christmas_tree_farm, sod_farm, orchard, tree_farm, microgreens_specialty, soil_mixer, farm_supply, landscaper, other, unknown",
   "is_wholesale": true/false (do they sell to trade/wholesale customers?),
@@ -214,7 +217,33 @@ Extract the following information and return ONLY a valid JSON object (no markdo
   "disqualification_signals": ["REQUIRED: Red flags like 'landscaping services', 'lawn care', 'retail only', 'no growing operation'. Empty array if clean."]
 }}
 
-IMPORTANT:
+IMPORTANT - CONTACT EXTRACTION (AGGRESSIVE MODE):
+- **contact_name**: Look for ANY person who would buy bulk growing media/soil. Use 2-phase approach:
+
+PHASE 1 - Search for TITLED positions (Priority 1-7):
+  1. Owner/President/Founder (look for: "Owner", "President", "Founder", "Co-owner")
+  2. Operations Manager (look for: "Operations Manager", "General Manager", "Production Manager")
+  3. Head Grower/Master Grower (look for: "Head Grower", "Master Grower", "Lead Grower")
+  4. Purchasing Manager (look for: "Purchasing", "Procurement", "Supply Chain")
+  5. Propagation Manager (look for: "Propagation Manager", "Propagator")
+  6. Greenhouse Manager (look for: "Greenhouse Manager", "Hoop House Manager")
+  7. Sales/Marketing (last resort: "Sales Manager", "Marketing Director")
+
+PHASE 2 - If NO titled position found, extract BEST GUESS name (Priority NULL):
+  - Look for: Family names in "About Us", names in team photos, founders mentioned in history
+  - Context clues: "Started by John Smith", "The Smith Family", "Meet the Growers: Jane Doe"
+  - Names associated with business (e.g., "John's Greenhouse" → likely John is owner)
+  - Email signatures, contact forms with names
+  - **ALWAYS extract a name if you find ANY person mentioned** - even without title
+
+- Extract the FIRST match found from Phase 1, OR best guess from Phase 2
+- If multiple people at same level, pick the one with more context
+- Look in: About Us, Team, Staff, Contact, History pages, email signatures, bios
+- Require FULL name (first + last), not just "John" or "The Smith Family"
+- **contact_priority**: 1-7 if titled position found, null if best guess
+- **contact_title**: Extract their actual title, or "No role found" if best guess
+
+OTHER RULES:
 - Return ONLY the JSON object, no markdown formatting
 - Use true/false for booleans (not "true"/"false")
 - Use null for unknown/missing values

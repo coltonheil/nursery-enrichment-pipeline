@@ -42,8 +42,10 @@ def get_random_user_agent():
     return random.choice(USER_AGENTS)
 
 def add_random_delay():
-    """Add a random delay between 2-5 seconds to avoid bot detection."""
-    delay = random.uniform(2.0, 5.0)
+    """Add a random delay between requests to avoid bot detection."""
+    # Reduced from 2-5s to 0.3-0.7s for faster batch processing
+    # Nursery sites are low-traffic and unlikely to rate-limit
+    delay = random.uniform(0.3, 0.7)
     time.sleep(delay)
     return delay
 
@@ -331,30 +333,54 @@ def scrape_and_extract(url):
     parsed_base = urlparse(url)
     base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
 
-    # Pages to try
+    # Pages to try - prioritized for finding staff/contact information
+    # Reordered to prioritize team pages earlier (before hitting 5-page limit)
     pages_to_scrape = [
         (url, "homepage"),
+        # Team/Staff pages FIRST - most valuable for finding contacts
+        (urljoin(base_domain, '/team'), "team"),
+        (urljoin(base_domain, '/our-team'), "our-team"),
+        (urljoin(base_domain, '/staff'), "staff"),
+        (urljoin(base_domain, '/meet-the-team'), "meet-team"),
+        (urljoin(base_domain, '/people'), "people"),
+        # Additional common patterns for nurseries
+        (urljoin(base_domain, '/meet-us'), "meet-us"),
+        (urljoin(base_domain, '/who-we-are'), "who-we-are"),
+        (urljoin(base_domain, '/our-story'), "our-story"),
+        # About pages (owner/founder info)
         (urljoin(base_domain, '/about'), "about"),
         (urljoin(base_domain, '/about-us'), "about-us"),
+        (urljoin(base_domain, '/aboutus'), "about-us-2"),
+        # Contact pages (sometimes have names)
         (urljoin(base_domain, '/contact'), "contact"),
-        (urljoin(base_domain, '/contact-us'), "contact-us")
+        (urljoin(base_domain, '/contact-us'), "contact-us"),
+        (urljoin(base_domain, '/contactus'), "contact-us-2"),
     ]
 
     all_text = []
     pages_scraped = 0
     pages_failed = 0
     status_codes = []
+    request_count = 0  # Track total requests for rate limiting
 
     for page_url, page_name in pages_to_scrape:
-        # Stop after successfully scraping 3 pages
-        if pages_scraped >= 3:
+        # Stop after successfully scraping 5 pages
+        if pages_scraped >= 5:
+            break
+        
+        # Stop after too many failures (likely site is blocking us)
+        if pages_failed >= 6:
             break
 
-        # Don't add delay before first request (homepage already had delay)
-        if pages_scraped > 0:
-            time.sleep(random.uniform(1.0, 2.0))  # Shorter delay for same domain
+        # Add delay between ALL requests (not just successful ones)
+        # This prevents rate limiting even when pages fail
+        if request_count > 0:
+            time.sleep(random.uniform(0.5, 1.0))  # Consistent delay between requests
+        request_count += 1
 
-        html_content, status_code, error_message = scrape_website(page_url, retry_count=1)
+        # FIX: Use retry_count=0 to enable retries on transient errors
+        # The delay is handled above, so we still skip the internal delay
+        html_content, status_code, error_message = scrape_website(page_url, retry_count=0)
 
         if error_message:
             pages_failed += 1

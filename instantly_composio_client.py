@@ -1,136 +1,78 @@
 """
-Instantly.ai Integration via Composio REST API
-Uses REST API directly instead of Python SDK due to SDK bugs
+Composio-based Instantly.ai Client Wrapper
+Provides simplified methods for nursery enrichment pipeline
 """
+
 import os
-import requests
+from composio import Composio
 from typing import List, Dict, Any, Optional
 
 
 class InstantlyComposioClient:
     """
-    Wrapper around Composio's Instantly.ai integration using REST API
-    
-    Usage:
-        client = InstantlyComposioClient()
-        campaigns = client.list_campaigns()
-        client.create_lead(campaign_id='...', email='test@example.com', ...)
+    Wrapper around Composio's Instantly.ai integration
+    Provides simplified methods for our use case
     """
     
     def __init__(self, api_key: str = None, account_id: str = None):
-        """
-        Initialize the client
-        
-        Args:
-            api_key: Composio API key (or from COMPOSIO_API_KEY env var)
-            account_id: Connected account ID (or from COMPOSIO_INSTANTLY_ACCOUNT_ID)
-        """
         self.api_key = api_key or os.getenv("COMPOSIO_API_KEY")
         self.account_id = account_id or os.getenv("COMPOSIO_INSTANTLY_ACCOUNT_ID")
-        self.base_url = "https://backend.composio.dev/api/v2"
         
         if not self.api_key:
-            raise ValueError("COMPOSIO_API_KEY not found in environment or parameters")
-        if not self.account_id:
-            raise ValueError("COMPOSIO_INSTANTLY_ACCOUNT_ID not found in environment or parameters")
+            raise ValueError("COMPOSIO_API_KEY not found in environment")
+        
+        self.client = Composio(api_key=self.api_key)
     
-    def _execute_action(self, action_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Execute a Composio action via REST API
-        
-        Args:
-            action_name: Name of the action (e.g., 'INSTANTLY_LIST_CAMPAIGNS')
-            params: Parameters for the action
-        
-        Returns:
-            Response data from the action
-        
-        Raises:
-            Exception: If the API call fails
-        """
-        url = f"{self.base_url}/actions/{action_name}/execute"
-        headers = {
-            "X-API-Key": self.api_key,
-            "Content-Type": "application/json"
-        }
-        data = {
-            "connectedAccountId": self.account_id,
-            "input": params
-        }
-        
-        response = requests.post(url, json=data, headers=headers, timeout=30)
-        
-        if response.status_code != 200:
-            raise Exception(f"Composio API error ({response.status_code}): {response.text}")
-        
-        result = response.json()
-        
-        # Check if the action was successful
-        if not result.get('successful', False):
-            error = result.get('error', 'Unknown error')
-            raise Exception(f"Action failed: {error}")
-        
-        return result.get('data', {})
+    def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a Composio action with error handling"""
+        try:
+            response = self.client.tools.execute(
+                action=action,
+                connected_account_id=self.account_id,
+                params=params
+            )
+            return response
+        except Exception as e:
+            print(f"❌ Error executing {action}: {str(e)}")
+            raise
     
     # ===== Campaign Methods =====
     
-    def list_campaigns(
-        self,
-        limit: Optional[int] = None,
-        search: Optional[str] = None,
-        starting_after: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        List all campaigns
-        
-        Args:
-            limit: Number of campaigns to return (1-100)
-            search: Search text to filter campaign names
-            starting_after: Cursor for pagination
-        
-        Returns:
-            List of campaign dicts
-        """
-        params = {}
-        if limit is not None:
-            params['limit'] = limit
-        if search:
-            params['search'] = search
-        if starting_after:
-            params['starting_after'] = starting_after
-        
-        result = self._execute_action('INSTANTLY_LIST_CAMPAIGNS', params)
-        return result.get('items', [])
+    def list_campaigns(self) -> List[Dict[str, Any]]:
+        """List all campaigns"""
+        response = self.execute("INSTANTLY_LIST_CAMPAIGNS", {})
+        return response.get('data', [])
     
     def get_campaign(self, campaign_id: str) -> Dict[str, Any]:
-        """
-        Get campaign details
-        
-        Args:
-            campaign_id: Instantly campaign ID
-        
-        Returns:
-            Campaign dict
-        """
-        result = self._execute_action('INSTANTLY_GET_CAMPAIGN', {
-            'campaign_id': campaign_id
+        """Get campaign details"""
+        response = self.execute("INSTANTLY_GET_CAMPAIGN", {
+            "campaign_id": campaign_id
         })
-        return result
+        return response.get('data', {})
+    
+    def create_campaign(
+        self,
+        name: str,
+        from_email: str,
+        reply_to_email: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Create a new campaign"""
+        params = {
+            "name": name,
+            "from_email": from_email
+        }
+        if reply_to_email:
+            params['reply_to_email'] = reply_to_email
+        
+        response = self.execute("INSTANTLY_CREATE_CAMPAIGN", params)
+        return response.get('data', {})
     
     def get_campaign_analytics(self, campaign_id: str) -> Dict[str, Any]:
-        """
-        Get campaign analytics (opens, clicks, replies)
-        
-        Args:
-            campaign_id: Instantly campaign ID
-        
-        Returns:
-            Analytics dict
-        """
-        result = self._execute_action('INSTANTLY_GET_CAMPAIGN_ANALYTICS', {
-            'campaign_id': campaign_id
+        """Get campaign analytics (opens, clicks, replies)"""
+        response = self.execute("INSTANTLY_GET_CAMPAIGN_ANALYTICS", {
+            "campaign_id": campaign_id
         })
-        return result
+        return response.get('data', {})
     
     # ===== Lead Methods =====
     
@@ -138,10 +80,10 @@ class InstantlyComposioClient:
         self,
         campaign_id: str,
         email: str,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
-        company_name: Optional[str] = None,
-        custom_variables: Optional[Dict[str, str]] = None
+        first_name: str = None,
+        last_name: str = None,
+        company_name: str = None,
+        custom_variables: Dict[str, str] = None
     ) -> Dict[str, Any]:
         """
         Add a single lead to a campaign
@@ -158,13 +100,10 @@ class InstantlyComposioClient:
                     'city': 'Austin',
                     'tier': 'A'
                 }
-        
-        Returns:
-            Result dict with success/failure
         """
         params = {
-            'campaign_id': campaign_id,
-            'email': email
+            "campaign_id": campaign_id,
+            "email": email
         }
         
         if first_name:
@@ -174,42 +113,61 @@ class InstantlyComposioClient:
         if company_name:
             params['company_name'] = company_name
         if custom_variables:
-            params['variables'] = custom_variables
+            params['custom_variables'] = custom_variables
         
-        result = self._execute_action('INSTANTLY_CREATE_LEAD', params)
-        return result
+        response = self.execute("INSTANTLY_CREATE_LEAD", params)
+        return response.get('data', {})
     
     def list_leads(
         self,
-        campaign_id: Optional[str] = None,
+        campaign_id: str = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """
-        List leads (optionally filtered by campaign)
-        
-        Args:
-            campaign_id: Filter by campaign ID (optional)
-            skip: Number of leads to skip
-            limit: Maximum leads to return
-        
-        Returns:
-            List of lead dicts
-        """
+        """List leads (optionally filtered by campaign)"""
         params = {
-            'skip': skip,
-            'limit': limit
+            "skip": skip,
+            "limit": limit
         }
         if campaign_id:
             params['campaign_id'] = campaign_id
         
-        result = self._execute_action('INSTANTLY_LIST_LEADS', params)
-        return result.get('items', [])
+        response = self.execute("INSTANTLY_LIST_LEADS", params)
+        return response.get('data', [])
+    
+    def get_lead(self, email: str) -> Dict[str, Any]:
+        """Get lead details by email"""
+        response = self.execute("INSTANTLY_GET_LEAD", {
+            "email": email
+        })
+        return response.get('data', {})
+    
+    def update_lead(
+        self,
+        email: str,
+        variables: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Update lead custom variables"""
+        response = self.execute("INSTANTLY_UPDATE_LEAD", {
+            "email": email,
+            "variables": variables
+        })
+        return response.get('data', {})
+    
+    def delete_lead(self, email: str) -> Dict[str, Any]:
+        """Remove lead from campaign"""
+        response = self.execute("INSTANTLY_DELETE_LEAD", {
+            "email": email
+        })
+        return response.get('data', {})
+    
+    # ===== Batch Methods =====
     
     def create_leads_batch(
         self,
         campaign_id: str,
-        leads: List[Dict[str, Any]]
+        leads: List[Dict[str, Any]],
+        show_progress: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Add multiple leads to a campaign
@@ -220,13 +178,15 @@ class InstantlyComposioClient:
                 - email (required)
                 - first_name, last_name, company_name (optional)
                 - custom_variables (optional dict)
+            show_progress: Print progress during batch creation
         
         Returns:
             List of results for each lead (success/failure)
         """
         results = []
+        total = len(leads)
         
-        for lead in leads:
+        for i, lead in enumerate(leads, 1):
             try:
                 result = self.create_lead(
                     campaign_id=campaign_id,
@@ -241,63 +201,93 @@ class InstantlyComposioClient:
                     'success': True,
                     'data': result
                 })
+                
+                if show_progress and i % 10 == 0:
+                    print(f"✓ {i}/{total} leads created...")
+                    
             except Exception as e:
                 results.append({
                     'email': lead['email'],
                     'success': False,
                     'error': str(e)
                 })
+                if show_progress:
+                    print(f"✗ Failed: {lead['email']} - {str(e)}")
+        
+        if show_progress:
+            success_count = sum(1 for r in results if r['success'])
+            print(f"\n✅ Batch complete: {success_count}/{total} successful")
         
         return results
+    
+    # ===== Email Verification =====
+    
+    def verify_email(self, email: str) -> Dict[str, Any]:
+        """Verify email deliverability"""
+        response = self.execute("INSTANTLY_VERIFY_EMAIL", {
+            "email": email
+        })
+        return response.get('data', {})
+    
+    # ===== Account Info =====
+    
+    def get_account_info(self) -> Dict[str, Any]:
+        """Get account details and limits"""
+        response = self.execute("INSTANTLY_GET_ACCOUNT", {})
+        return response.get('data', {})
+    
+    # ===== Webhooks (for Phase 3) =====
+    
+    def list_webhooks(self) -> List[Dict[str, Any]]:
+        """List configured webhooks"""
+        response = self.execute("INSTANTLY_LIST_WEBHOOKS", {})
+        return response.get('data', [])
+    
+    def create_webhook(
+        self,
+        url: str,
+        events: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Create a webhook for events
+        
+        Args:
+            url: Your webhook endpoint URL
+            events: List of events to subscribe to
+                ['email.opened', 'email.replied', 'email.bounced', etc.]
+        """
+        response = self.execute("INSTANTLY_CREATE_WEBHOOK", {
+            "url": url,
+            "events": events
+        })
+        return response.get('data', {})
+    
+    def delete_webhook(self, webhook_id: str) -> Dict[str, Any]:
+        """Delete a webhook"""
+        response = self.execute("INSTANTLY_DELETE_WEBHOOK", {
+            "webhook_id": webhook_id
+        })
+        return response.get('data', {})
 
 
+# Example usage
 if __name__ == "__main__":
-    # Example usage / testing
     import sys
-    from pathlib import Path
     
-    # Load .env file
-    env_file = Path(__file__).parent / '.env'
-    if env_file.exists():
-        with open(env_file) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key] = value
-    
-    print("=" * 60)
-    print("Instantly Composio Client Test")
-    print("=" * 60)
-    print()
-    
+    # Initialize client
     try:
-        # Initialize client
         client = InstantlyComposioClient()
-        print("✓ Client initialized")
-        print(f"  API Key: {client.api_key[:10]}...")
-        print(f"  Account ID: {client.account_id}")
-        print()
-        
-        # List campaigns
-        print("Testing: List campaigns...")
-        campaigns = client.list_campaigns()
-        print(f"✅ Found {len(campaigns)} campaigns")
-        
-        if campaigns:
-            for i, campaign in enumerate(campaigns[:3], 1):
-                name = campaign.get('name', 'Unnamed')
-                campaign_id = campaign.get('id', 'N/A')
-                status = campaign.get('status', 'unknown')
-                print(f"  {i}. {name} (ID: {campaign_id}, Status: {status})")
-        else:
-            print("  (No campaigns found - create one in Instantly first)")
-        
-        print()
-        print("=" * 60)
-        print("✅ ALL TESTS PASSED!")
-        print("=" * 60)
-        
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print("✅ Client initialized successfully")
+    except ValueError as e:
+        print(f"❌ {e}")
+        print("Please set COMPOSIO_API_KEY in .env file")
         sys.exit(1)
+    
+    # Test: List campaigns
+    try:
+        campaigns = client.list_campaigns()
+        print(f"\n📊 Found {len(campaigns)} campaigns:")
+        for camp in campaigns[:5]:
+            print(f"  - {camp.get('name', 'Unnamed')} (ID: {camp.get('id', 'N/A')})")
+    except Exception as e:
+        print(f"❌ Failed to list campaigns: {e}")

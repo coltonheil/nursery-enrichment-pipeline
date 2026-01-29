@@ -1,7 +1,8 @@
-# OUTREACH TEMPLATES - Nursery Growing Media Sales
+# OUTREACH TEMPLATES - Bulk Worm Castings Sales (B2B)
 
 **Last Updated:** 2026-01-29  
-**Target Market:** Wisconsin wholesale nurseries, greenhouse growers, container production operations
+**Product:** Bulk worm castings (supersacks: 1 CY / 2,250 lbs, up to truckload)  
+**Target Market:** Wisconsin wholesale nurseries, greenhouse growers, container production operations (B2B only)
 
 ---
 
@@ -10,9 +11,9 @@
 ### Template A: Cost/Supply Focus (For Tier A nurseries)
 
 **Subject Lines (A/B test):**
-- "[First Name], bulk growing media question for [Company]"
-- "Wisconsin supplier for [Company]'s spring season"
-- "Growing media supply for [production volume] operation"
+- "[First Name], bulk worm castings for [Company]"
+- "Wisconsin worm castings supplier question"
+- "Wholesale worm castings - supersacks/truckload"
 
 **Body:**
 
@@ -21,12 +22,14 @@ Hi [First Name],
 
 I noticed [Company] runs [greenhouse/container/specific operation from research] in [City]. 
 
-We supply bulk growing media to Wisconsin nurseries like [similar operation]. Most see:
-- 15-25% cost savings vs. Pro-Mix/SunGro retail pricing
-- Consistent quality across seasonal orders
-- Same-day/next-day delivery in [Region]
+We supply bulk worm castings (supersacks/truckload) to Wisconsin wholesale nurseries. Many use them for:
+- Potting mix amendments (15-25% worm castings blend)
+- Organic product lines
+- Custom growing media formulations
 
-Worth a quick call to see if our pricing works for [Company]'s [spring/summer] season?
+Pricing is competitive for wholesale volume (1+ CY supersacks).
+
+Worth a quick call to discuss wholesale pricing for [Company]?
 
 Best,
 [Your Name]
@@ -41,26 +44,28 @@ Best,
 
 ---
 
-### Template B: Quality/Consistency Focus (For operations with specific crops)
+### Template B: Organic/Quality Focus (For organic operations)
 
 **Subject Lines:**
-- "Growing media for [specific crop] production"
-- "Question about [Company]'s potting mix supply"
-- "Wisconsin-blended growing media for [Company]"
+- "Bulk worm castings for [Company]'s organic line"
+- "Question about [Company]'s organic amendments"
+- "Wisconsin OMRI-certified worm castings"
 
 **Body:**
 
 ```
 Hi [First Name],
 
-Saw that [Company] specializes in [specific crops from research - e.g., perennials, annuals, vegetables].
+Saw that [Company] [has organic certification / focuses on sustainable growing].
 
-We blend growing media specifically for Wisconsin growers. A few of our [crop type] customers mention:
-- More consistent germination/rooting vs. off-the-shelf mixes
-- Custom drainage/aeration for their specific crops
-- Ability to adjust blends mid-season if needed
+We supply bulk worm castings (OMRI-certified) to Wisconsin wholesale nurseries for:
+- Organic potting mix blends
+- Soil amendment programs
+- Premium product lines
 
-Would it make sense to send you a sample and pricing for your [spring/fall] production run?
+Most wholesale growers appreciate the quality vs. bagged retail products - and the pricing reflects bulk volume (supersacks/truckload).
+
+Would it make sense to send sample and wholesale pricing for [Company]?
 
 Best,
 [Your Name]
@@ -68,28 +73,28 @@ Best,
 
 ---
 
-### Template C: Organic/Sustainability Angle (For organic-focused nurseries)
+### Template C: Wholesale Volume Focus (For large operations)
 
 **Subject Lines:**
-- "OMRI-certified growing media for [Company]"
-- "Organic potting mix question"
-- "[First Name], organic growing media for Wisconsin"
+- "Wholesale worm castings - truckload pricing"
+- "Bulk amendment supply for [Company]"
+- "[First Name], supersack/truckload worm castings"
 
 **Body:**
 
 ```
 Hi [First Name],
 
-I saw [Company] focuses on [organic/sustainable] growing - we supply OMRI-certified growing media to organic nurseries across Wisconsin.
+I saw [Company] is a [large/wholesale] operation in [City].
 
-What sets us apart:
-- Full OMRI certification (not just "contains organic matter")
-- Wisconsin-sourced base materials (peat alternatives available)
-- Custom blends for organic container production
+We supply bulk worm castings to Wisconsin wholesale nurseries - supersacks (1 CY / 2,250 lbs) up to full truckloads.
 
-Most organic growers appreciate avoiding the upcharge that national brands add for "organic" lines.
+Most wholesale operations use them for:
+- Potting mix amendments (cost-effective at volume)
+- Organic product lines (OMRI-certified)
+- Custom growing media blends
 
-Worth a conversation about [Company]'s needs for this season?
+Pricing gets competitive at truckload volume. Worth discussing [Company]'s annual needs?
 
 Best,
 [Your Name]

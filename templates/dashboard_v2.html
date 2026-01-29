@@ -96,7 +96,7 @@
         <div class="rounded-lg bg-white px-5 py-6 shadow sm:px-6">
             <div class="flex items-center justify-between">
                 <h3 class="text-base font-semibold leading-6 text-gray-900">Tier Distribution</h3>
-                <a href="{{ url_for('leads') }}" class="text-sm font-medium text-primary-600 hover:text-primary-500">View all →</a>
+                <a href="{{ url_for('export_v2') }}" class="text-sm font-medium text-primary-600 hover:text-primary-500">Export leads →</a>
             </div>
             <div class="mt-6 flow-root">
                 <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -107,7 +107,7 @@
                                     <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">Tier</th>
                                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Count</th>
                                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Percentage</th>
-                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Progress</th>
+                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Distribution</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200">
@@ -199,6 +199,22 @@
                                 </tr>
                                 {% endif %}
                             </tbody>
+                            <tfoot class="border-t-2 border-gray-300">
+                                <tr class="bg-gray-50">
+                                    <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-bold text-gray-900 sm:pl-0">
+                                        Total Wine
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 font-bold">{{ stats.total |number_format }}</td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 font-semibold">100%</td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                        <div class="flex items-center gap-x-2">
+                                            <div class="h-2 w-32 rounded-full bg-gray-300">
+                                                <div class="h-2 rounded-full bg-gray-700" style="width: 100%"></div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
@@ -303,17 +319,17 @@
             </button>
 
             <!-- View All Leads -->
-            <a href="{{ url_for('leads') }}"
+            <a href="{{ url_for('export_v2') }}"
                class="relative block overflow-hidden rounded-lg bg-white px-4 py-5 shadow hover:shadow-md transition-shadow sm:px-6">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
                         <svg class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                         </svg>
                     </div>
                     <div class="ml-3 flex-1">
-                        <div class="text-sm font-medium text-gray-900">Browse All Leads</div>
-                        <div class="text-sm text-gray-500">Filter, search, and manage</div>
+                        <div class="text-sm font-medium text-gray-900">Export & Filter Leads</div>
+                        <div class="text-sm text-gray-500">Custom exports with presets</div>
                     </div>
                     <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -330,7 +346,7 @@
         <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
             {% if tier_dist.X > 0 %}
             <!-- View Disqualified -->
-            <a href="{{ url_for('leads', tier='X') }}"
+            <a href="{{ url_for('export_v2', tier='X') }}"
                class="relative block overflow-hidden rounded-lg border-2 border-danger-200 bg-danger-50 px-4 py-5 hover:border-danger-300 hover:shadow-md transition-shadow sm:px-6">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">

@@ -1818,22 +1818,6 @@ def health():
     """Health check endpoint."""
     return {'status': 'ok', 'message': 'Nursery Enrichment Pipeline is running'}
 
-if __name__ == '__main__':
-    # Initialize database
-    init_db()
-    print("\n" + "="*50)
-    print("Starting Nursery Enrichment Pipeline")
-    print("="*50)
-    print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
-    print(f"Allowed file types: {', '.join(app.config['ALLOWED_EXTENSIONS'])}")
-    print(f"Max file size: {app.config['MAX_CONTENT_LENGTH'] // (1024*1024)}MB")
-    print("\nAccess the application at: http://localhost:5000")
-    print("="*50 + "\n")
-
-    # Run the Flask app
-    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
-    app.run(host='0.0.0.0', port=5002, debug=debug_mode)
-
 # ============================================================================
 # V2 Modern UI Routes
 # ============================================================================
@@ -1941,4 +1925,20 @@ def number_format_filter(value):
         return "{:,}".format(int(value))
     except (ValueError, TypeError):
         return value
+
+if __name__ == '__main__':
+    # Initialize database
+    init_db()
+    print("\n" + "="*50)
+    print("Starting Nursery Enrichment Pipeline")
+    print("="*50)
+    print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
+    print(f"Allowed file types: {', '.join(app.config['ALLOWED_EXTENSIONS'])}")
+    print(f"Max file size: {app.config['MAX_CONTENT_LENGTH'] // (1024*1024)}MB")
+    print("\nAccess the application at: http://localhost:5000")
+    print("="*50 + "\n")
+
+    # Run the Flask app
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', port=5002, debug=debug_mode)
 

@@ -1926,6 +1926,20 @@ def number_format_filter(value):
     except (ValueError, TypeError):
         return value
 
+# =============================================================================
+# INSTANTLY INTEGRATION (Phases 1-3)
+# =============================================================================
+
+# Register Instantly routes and API endpoints
+try:
+    from instantly_routes import register_instantly_routes
+    register_instantly_routes(app)
+except ImportError as e:
+    print(f"⚠️  Instantly integration not loaded: {e}")
+except Exception as e:
+    print(f"⚠️  Instantly integration error: {e}")
+
+
 if __name__ == '__main__':
     # Initialize database
     init_db()

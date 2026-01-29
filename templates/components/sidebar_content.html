@@ -48,6 +48,49 @@
             </ul>
         </li>
 
+        <!-- Outreach (Instantly Integration) -->
+        <li>
+            <div class="text-xs font-semibold leading-6 text-gray-400">OUTREACH</div>
+            <ul role="list" class="-mx-2 mt-2 space-y-1">
+                <!-- Outreach Queue -->
+                <li>
+                    <a href="/v2/outreach-queue"
+                       class="group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold
+                              {% if request.endpoint == 'outreach_queue_v2' %}bg-gray-50 text-primary-600{% else %}text-gray-700 hover:text-primary-600 hover:bg-gray-50{% endif %}">
+                        <svg class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 001.183 1.981l6.478 3.488m8.839 2.51l-4.66-2.51m0 0l-1.023-.55a2.25 2.25 0 00-2.134 0l-1.022.55m0 0l-4.661 2.51m16.5 1.615a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V8.844a2.25 2.25 0 011.183-1.98l7.5-4.04a2.25 2.25 0 012.134 0l7.5 4.04a2.25 2.25 0 011.183 1.98V19.5z" />
+                        </svg>
+                        Outreach Queue
+                    </a>
+                </li>
+
+                <!-- Campaign Stats -->
+                <li>
+                    <a href="/v2/campaign-stats"
+                       class="group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold
+                              {% if request.endpoint == 'campaign_stats_v2' %}bg-gray-50 text-primary-600{% else %}text-gray-700 hover:text-primary-600 hover:bg-gray-50{% endif %}">
+                        <svg class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                        </svg>
+                        Campaign Stats
+                    </a>
+                </li>
+
+                <!-- Hot Leads -->
+                <li>
+                    <a href="/v2/hot-leads"
+                       class="group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold
+                              {% if request.endpoint == 'hot_leads_v2' %}bg-gray-50 text-primary-600{% else %}text-gray-700 hover:text-primary-600 hover:bg-gray-50{% endif %}">
+                        <svg class="h-6 w-6 shrink-0 text-orange-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z" />
+                        </svg>
+                        Hot Leads
+                    </a>
+                </li>
+            </ul>
+        </li>
+
         <!-- Pipeline Actions -->
         <li>
             <div class="text-xs font-semibold leading-6 text-gray-400">PIPELINE ACTIONS</div>

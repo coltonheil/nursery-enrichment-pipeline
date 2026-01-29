@@ -1,0 +1,363 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Campaign Stats - Instantly Integration{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="bi bi-graph-up text-primary"></i>
+                        Campaign Stats
+                    </h2>
+                    <p class="text-muted mb-0">Track performance of your Instantly campaigns</p>
+                </div>
+                <div>
+                    <select class="form-select" id="dateRange" onchange="loadStats()" style="width: 150px;">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overall Stats -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-primary" id="totalSent">-</h3>
+                    <small class="text-muted">Sent</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-info" id="totalOpened">-</h3>
+                    <small class="text-muted">Opened</small>
+                    <br><small class="text-success" id="openRate">-</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-warning" id="totalClicked">-</h3>
+                    <small class="text-muted">Clicked</small>
+                    <br><small class="text-success" id="clickRate">-</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-success" id="totalReplied">-</h3>
+                    <small class="text-muted">Replied</small>
+                    <br><small class="text-success" id="replyRate">-</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-danger" id="totalBounced">-</h3>
+                    <small class="text-muted">Bounced</small>
+                    <br><small class="text-danger" id="bounceRate">-</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-secondary" id="totalUnsubscribed">-</h3>
+                    <small class="text-muted">Unsubscribed</small>
+                    <br><small class="text-danger" id="unsubRate">-</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Campaign Performance Table -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Campaign Performance</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Campaign</th>
+                                    <th class="text-end">Sent</th>
+                                    <th class="text-end">Opened</th>
+                                    <th class="text-end">Clicked</th>
+                                    <th class="text-end">Replied</th>
+                                    <th class="text-end">Bounced</th>
+                                </tr>
+                            </thead>
+                            <tbody id="campaignStatsTable">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hot Leads -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-fire text-danger"></i> Hot Leads
+                    </h5>
+                    <a href="/v2/hot-leads" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="hotLeadsList">
+                        <li class="list-group-item text-center text-muted py-4">
+                            Loading...
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning text-warning"></i> Recent Activity
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="recentEventsList">
+                        <li class="list-group-item text-center text-muted py-4">
+                            Loading...
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
+    loadHotLeads();
+    loadRecentEvents();
+});
+
+async function loadStats() {
+    const days = document.getElementById('dateRange').value;
+    
+    try {
+        const response = await fetch(`/api/v2/instantly/campaign-stats?days=${days}`);
+        const data = await response.json();
+        
+        // Calculate totals
+        let totals = {
+            sent: 0, opened: 0, clicked: 0, replied: 0, bounced: 0, unsubscribed: 0
+        };
+        
+        (data.stats || []).forEach(s => {
+            totals.sent += s.total_sent || 0;
+            totals.opened += s.total_opened || 0;
+            totals.clicked += s.total_clicked || 0;
+            totals.replied += s.total_replied || 0;
+            totals.bounced += s.total_bounced || 0;
+            totals.unsubscribed += s.total_unsubscribed || 0;
+        });
+        
+        // Update stats
+        document.getElementById('totalSent').textContent = totals.sent;
+        document.getElementById('totalOpened').textContent = totals.opened;
+        document.getElementById('totalClicked').textContent = totals.clicked;
+        document.getElementById('totalReplied').textContent = totals.replied;
+        document.getElementById('totalBounced').textContent = totals.bounced;
+        document.getElementById('totalUnsubscribed').textContent = totals.unsubscribed;
+        
+        // Rates
+        const openRate = totals.sent > 0 ? ((totals.opened / totals.sent) * 100).toFixed(1) : 0;
+        const clickRate = totals.sent > 0 ? ((totals.clicked / totals.sent) * 100).toFixed(1) : 0;
+        const replyRate = totals.sent > 0 ? ((totals.replied / totals.sent) * 100).toFixed(1) : 0;
+        const bounceRate = totals.sent > 0 ? ((totals.bounced / totals.sent) * 100).toFixed(1) : 0;
+        const unsubRate = totals.sent > 0 ? ((totals.unsubscribed / totals.sent) * 100).toFixed(1) : 0;
+        
+        document.getElementById('openRate').textContent = `${openRate}%`;
+        document.getElementById('clickRate').textContent = `${clickRate}%`;
+        document.getElementById('replyRate').textContent = `${replyRate}%`;
+        document.getElementById('bounceRate').textContent = `${bounceRate}%`;
+        document.getElementById('unsubRate').textContent = `${unsubRate}%`;
+        
+        // Render campaign table
+        renderCampaignStats(data.stats || []);
+        
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+function renderCampaignStats(stats) {
+    const tbody = document.getElementById('campaignStatsTable');
+    
+    if (!stats || stats.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="6" class="text-center py-4 text-muted">
+                <i class="bi bi-inbox"></i> No campaign data yet
+                <br><small>Data will appear once leads are sent and webhooks are received</small>
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = stats.map(s => `
+        <tr>
+            <td>
+                <code>${(s.campaign_id || 'Unknown').substring(0, 12)}...</code>
+            </td>
+            <td class="text-end">${s.total_sent || 0}</td>
+            <td class="text-end">
+                ${s.total_opened || 0}
+                <small class="text-muted">(${s.total_sent > 0 ? ((s.total_opened / s.total_sent) * 100).toFixed(0) : 0}%)</small>
+            </td>
+            <td class="text-end">
+                ${s.total_clicked || 0}
+                <small class="text-muted">(${s.total_sent > 0 ? ((s.total_clicked / s.total_sent) * 100).toFixed(0) : 0}%)</small>
+            </td>
+            <td class="text-end">
+                <span class="text-success fw-bold">${s.total_replied || 0}</span>
+            </td>
+            <td class="text-end">
+                <span class="text-danger">${s.total_bounced || 0}</span>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function loadHotLeads() {
+    try {
+        const response = await fetch('/api/v2/instantly/hot-leads?limit=5');
+        const data = await response.json();
+        
+        const list = document.getElementById('hotLeadsList');
+        
+        if (!data.leads || data.leads.length === 0) {
+            list.innerHTML = `
+                <li class="list-group-item text-center text-muted py-4">
+                    <i class="bi bi-hourglass"></i> No hot leads yet
+                    <br><small>Leads that reply will appear here</small>
+                </li>
+            `;
+            return;
+        }
+        
+        list.innerHTML = data.leads.map(lead => `
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <strong>${escapeHtml(lead.business_name || 'Unknown')}</strong>
+                        <br><small class="text-muted">${escapeHtml(lead.owner_email || lead.contact_email || '')}</small>
+                    </div>
+                    <span class="badge ${getEventBadgeClass(lead.event_type)}">${formatEventType(lead.event_type)}</span>
+                </div>
+                <small class="text-muted">${formatDate(lead.event_time)}</small>
+            </li>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading hot leads:', error);
+    }
+}
+
+async function loadRecentEvents() {
+    try {
+        const response = await fetch('/api/v2/instantly/events?limit=10');
+        const data = await response.json();
+        
+        const list = document.getElementById('recentEventsList');
+        
+        if (!data.events || data.events.length === 0) {
+            list.innerHTML = `
+                <li class="list-group-item text-center text-muted py-4">
+                    <i class="bi bi-clock-history"></i> No events yet
+                    <br><small>Events from Instantly webhooks will appear here</small>
+                </li>
+            `;
+            return;
+        }
+        
+        list.innerHTML = data.events.slice(0, 8).map(event => `
+            <li class="list-group-item py-2">
+                <div class="d-flex justify-content-between">
+                    <small>
+                        <span class="badge ${getEventBadgeClass(event.event_type)} me-1">${formatEventType(event.event_type)}</span>
+                        ${escapeHtml(event.email)}
+                    </small>
+                    <small class="text-muted">${formatTimeAgo(event.received_at)}</small>
+                </div>
+            </li>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading events:', error);
+    }
+}
+
+function getEventBadgeClass(eventType) {
+    const classes = {
+        'email.sent': 'bg-secondary',
+        'email.opened': 'bg-info',
+        'email.clicked': 'bg-warning',
+        'email.replied': 'bg-success',
+        'email.bounced': 'bg-danger',
+        'email.unsubscribed': 'bg-dark',
+        'lead.interested': 'bg-success',
+        'lead.meeting_booked': 'bg-primary'
+    };
+    return classes[eventType] || 'bg-secondary';
+}
+
+function formatEventType(type) {
+    if (!type) return 'Unknown';
+    return type.split('.').pop().charAt(0).toUpperCase() + type.split('.').pop().slice(1);
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+}
+
+function formatTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,251 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Hot Leads - Instantly Integration{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="bi bi-fire text-danger"></i>
+                        Hot Leads
+                    </h2>
+                    <p class="text-muted mb-0">Leads that have replied or shown interest</p>
+                </div>
+                <div>
+                    <a href="/v2/campaign-stats" class="btn btn-outline-primary">
+                        <i class="bi bi-graph-up"></i> Campaign Stats
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-success" id="repliedCount">0</h3>
+                    <small class="text-muted">Replied</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-primary" id="interestedCount">0</h3>
+                    <small class="text-muted">Interested</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-info" id="meetingBookedCount">0</h3>
+                    <small class="text-muted">Meeting Booked</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-warning" id="totalHotCount">0</h3>
+                    <small class="text-muted">Total Hot</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hot Leads Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Hot Leads</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadHotLeads()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Business</th>
+                            <th>Contact</th>
+                            <th>Location</th>
+                            <th>Event</th>
+                            <th>When</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hotLeadsTable">
+                        <tr>
+                            <td colspan="6" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadHotLeads();
+});
+
+async function loadHotLeads() {
+    try {
+        const response = await fetch('/api/v2/instantly/hot-leads?limit=100');
+        const data = await response.json();
+        
+        const leads = data.leads || [];
+        
+        // Count by type
+        const counts = {
+            'email.replied': 0,
+            'lead.interested': 0,
+            'lead.meeting_booked': 0
+        };
+        
+        leads.forEach(lead => {
+            if (counts.hasOwnProperty(lead.event_type)) {
+                counts[lead.event_type]++;
+            }
+        });
+        
+        document.getElementById('repliedCount').textContent = counts['email.replied'];
+        document.getElementById('interestedCount').textContent = counts['lead.interested'];
+        document.getElementById('meetingBookedCount').textContent = counts['lead.meeting_booked'];
+        document.getElementById('totalHotCount').textContent = leads.length;
+        
+        renderHotLeads(leads);
+    } catch (error) {
+        console.error('Error loading hot leads:', error);
+        document.getElementById('hotLeadsTable').innerHTML = `
+            <tr><td colspan="6" class="text-center text-danger py-4">
+                Error loading hot leads: ${error.message}
+            </td></tr>
+        `;
+    }
+}
+
+function renderHotLeads(leads) {
+    const tbody = document.getElementById('hotLeadsTable');
+    
+    if (!leads || leads.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="6" class="text-center py-5 text-muted">
+                <i class="bi bi-hourglass" style="font-size: 3rem;"></i>
+                <p class="mt-3 mb-0">No hot leads yet</p>
+                <small>Leads that reply or show interest will appear here</small>
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = leads.map(lead => `
+        <tr>
+            <td>
+                <strong>${escapeHtml(lead.business_name || 'Unknown')}</strong>
+                <br>
+                <small class="text-muted">ID: ${lead.id}</small>
+                ${lead.tier ? `<span class="badge ${getTierBadgeClass(lead.tier)} ms-1">${lead.tier}</span>` : ''}
+            </td>
+            <td>
+                ${lead.owner_name ? `<div>${escapeHtml(lead.owner_name)}</div>` : ''}
+                <code class="small">${escapeHtml(lead.owner_email || lead.contact_email || 'No email')}</code>
+                ${lead.phone ? `<br><small class="text-muted">${escapeHtml(lead.phone)}</small>` : ''}
+            </td>
+            <td>
+                ${lead.city || ''}, ${lead.state || ''}
+            </td>
+            <td>
+                <span class="badge ${getEventBadgeClass(lead.event_type)}">${formatEventType(lead.event_type)}</span>
+            </td>
+            <td>
+                <small>${formatTimeAgo(lead.event_time)}</small>
+                <br><small class="text-muted">${formatDate(lead.event_time)}</small>
+            </td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <a href="${lead.website || '#'}" target="_blank" class="btn btn-outline-secondary ${!lead.website ? 'disabled' : ''}" title="Visit Website">
+                        <i class="bi bi-globe"></i>
+                    </a>
+                    <button class="btn btn-outline-primary" onclick="viewLead(${lead.id})" title="View Details">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function viewLead(leadId) {
+    // Open lead in new tab or modal
+    window.open(`/lead/${leadId}`, '_blank');
+}
+
+function getTierBadgeClass(tier) {
+    const classes = {
+        'A': 'bg-success',
+        'B': 'bg-primary',
+        'C': 'bg-secondary'
+    };
+    return classes[tier] || 'bg-dark';
+}
+
+function getEventBadgeClass(eventType) {
+    const classes = {
+        'email.replied': 'bg-success',
+        'lead.interested': 'bg-primary',
+        'lead.meeting_booked': 'bg-info',
+        'lead.meeting_completed': 'bg-success',
+        'email.opened': 'bg-secondary'
+    };
+    return classes[eventType] || 'bg-secondary';
+}
+
+function formatEventType(type) {
+    if (!type) return 'Unknown';
+    const labels = {
+        'email.replied': '✉️ Replied',
+        'lead.interested': '👍 Interested',
+        'lead.meeting_booked': '📅 Meeting Booked',
+        'lead.meeting_completed': '✅ Meeting Done'
+    };
+    return labels[type] || type.split('.').pop();
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString();
+}
+
+function formatTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+    return `${Math.floor(diff / 604800)} weeks ago`;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,726 @@
+{% extends "base_v2.html" %}
+
+{% block title %}Outreach Queue - Instantly Integration{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">
+                        <i class="bi bi-envelope-paper text-primary"></i>
+                        Outreach Queue
+                    </h2>
+                    <p class="text-muted mb-0">Review and approve leads before sending to Instantly</p>
+                </div>
+                <div>
+                    <button class="btn btn-success me-2" id="sendApprovedBtn" onclick="sendApproved()">
+                        <i class="bi bi-send"></i> Send Approved (<span id="approvedCount">0</span>)
+                    </button>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addToQueueModal">
+                        <i class="bi bi-plus-circle"></i> Add Leads
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h3 class="mb-0" id="statTotal">0</h3>
+                    <small class="text-muted">Total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning bg-opacity-25">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-warning" id="statPending">0</h3>
+                    <small class="text-muted">Pending</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success bg-opacity-25">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-success" id="statApproved">0</h3>
+                    <small class="text-muted">Approved</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info bg-opacity-25">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-info" id="statSent">0</h3>
+                    <small class="text-muted">Sent</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-danger bg-opacity-25">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-danger" id="statRejected">0</h3>
+                    <small class="text-muted">Rejected</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-secondary bg-opacity-25">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 text-secondary" id="statFailed">0</h3>
+                    <small class="text-muted">Failed</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <label class="col-form-label">Status:</label>
+                </div>
+                <div class="col-auto">
+                    <select class="form-select" id="filterStatus" onchange="loadQueue()">
+                        <option value="">All</option>
+                        <option value="pending" selected>Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="sent">Sent</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="col-form-label">Tier:</label>
+                </div>
+                <div class="col-auto">
+                    <select class="form-select" id="filterTier" onchange="loadQueue()">
+                        <option value="">All</option>
+                        <option value="A">Tier A</option>
+                        <option value="B">Tier B</option>
+                        <option value="C">Tier C</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-secondary" onclick="loadQueue()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                </div>
+                <div class="col-auto ms-auto">
+                    <div class="btn-group">
+                        <button class="btn btn-outline-success" onclick="bulkApprove()">
+                            <i class="bi bi-check-all"></i> Approve Selected
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="bulkReject()">
+                            <i class="bi bi-x-lg"></i> Reject Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue Table -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll()">
+                            </th>
+                            <th>Lead</th>
+                            <th>Email</th>
+                            <th>Tier</th>
+                            <th>Campaign</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th style="width: 150px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queueTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    Showing <span id="showingStart">0</span>-<span id="showingEnd">0</span> of <span id="showingTotal">0</span>
+                </div>
+                <nav>
+                    <ul class="pagination mb-0" id="pagination">
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add to Queue Modal -->
+<div class="modal fade" id="addToQueueModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Leads to Queue</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Select Tier(s) to Queue:</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="checkbox" class="btn-check" id="queueTierA" value="A" checked>
+                        <label class="btn btn-outline-primary" for="queueTierA">Tier A</label>
+                        <input type="checkbox" class="btn-check" id="queueTierB" value="B" checked>
+                        <label class="btn btn-outline-primary" for="queueTierB">Tier B</label>
+                        <input type="checkbox" class="btn-check" id="queueTierC" value="C">
+                        <label class="btn btn-outline-primary" for="queueTierC">Tier C</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Filter Options:</label>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="queueOnlyWithEmail" checked>
+                        <label class="form-check-label" for="queueOnlyWithEmail">Only leads with email addresses</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="queueSkipSent" checked>
+                        <label class="form-check-label" for="queueSkipSent">Skip leads already sent to Instantly</label>
+                    </div>
+                </div>
+                <div class="alert alert-info" id="queuePreview">
+                    <i class="bi bi-info-circle"></i> Click "Preview" to see how many leads will be added
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="previewQueue()">
+                    <i class="bi bi-eye"></i> Preview
+                </button>
+                <button type="button" class="btn btn-primary" onclick="addLeadsToQueue()">
+                    <i class="bi bi-plus-circle"></i> Add to Queue
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Item Modal -->
+<div class="modal fade" id="editItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Queue Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editItemId">
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" id="editEmail">
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="editFirstName">
+                    </div>
+                    <div class="col">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" class="form-control" id="editLastName">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Campaign</label>
+                    <select class="form-select" id="editCampaign">
+                        <option value="">Auto-assign by tier</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="editNotes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveItemEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// State
+let currentPage = 0;
+const pageSize = 50;
+let selectedItems = new Set();
+let campaigns = [];
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
+    loadQueue();
+    loadCampaigns();
+});
+
+// Load queue stats
+async function loadStats() {
+    try {
+        const response = await fetch('/api/v2/instantly/queue/stats');
+        const data = await response.json();
+        
+        document.getElementById('statTotal').textContent = data.total || 0;
+        document.getElementById('statPending').textContent = data.by_status?.pending || 0;
+        document.getElementById('statApproved').textContent = data.by_status?.approved || 0;
+        document.getElementById('statSent').textContent = data.by_status?.sent || 0;
+        document.getElementById('statRejected').textContent = data.by_status?.rejected || 0;
+        document.getElementById('statFailed').textContent = data.by_status?.failed || 0;
+        
+        document.getElementById('approvedCount').textContent = data.by_status?.approved || 0;
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+// Load queue items
+async function loadQueue() {
+    const status = document.getElementById('filterStatus').value;
+    const tier = document.getElementById('filterTier').value;
+    
+    const params = new URLSearchParams({
+        limit: pageSize,
+        offset: currentPage * pageSize
+    });
+    
+    if (status) params.append('status', status);
+    if (tier) params.append('tier', tier);
+    
+    try {
+        const response = await fetch(`/api/v2/instantly/queue?${params}`);
+        const data = await response.json();
+        
+        renderQueue(data.items, data.total);
+    } catch (error) {
+        console.error('Error loading queue:', error);
+        document.getElementById('queueTableBody').innerHTML = `
+            <tr><td colspan="8" class="text-center text-danger py-4">
+                Error loading queue: ${error.message}
+            </td></tr>
+        `;
+    }
+}
+
+// Render queue table
+function renderQueue(items, total) {
+    const tbody = document.getElementById('queueTableBody');
+    
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="8" class="text-center py-4 text-muted">
+                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                <p class="mb-0 mt-2">No items in queue</p>
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = items.map(item => `
+        <tr data-id="${item.id}">
+            <td>
+                <input type="checkbox" class="form-check-input item-checkbox" 
+                       value="${item.id}" onchange="toggleItemSelect(${item.id})"
+                       ${selectedItems.has(item.id) ? 'checked' : ''}
+                       ${item.status !== 'pending' ? 'disabled' : ''}>
+            </td>
+            <td>
+                <strong>${escapeHtml(item.company_name || 'N/A')}</strong>
+                <br><small class="text-muted">${escapeHtml(item.first_name || '')} ${escapeHtml(item.last_name || '')}</small>
+            </td>
+            <td>
+                <code>${escapeHtml(item.email)}</code>
+            </td>
+            <td>
+                <span class="badge ${getTierBadgeClass(item.tier)}">${item.tier}</span>
+            </td>
+            <td>
+                <small class="text-muted">${item.campaign_id ? item.campaign_id.substring(0, 8) + '...' : 'Auto'}</small>
+            </td>
+            <td>
+                ${getStatusBadge(item.status)}
+            </td>
+            <td>
+                <small>${formatDate(item.created_at)}</small>
+            </td>
+            <td>
+                ${item.status === 'pending' ? `
+                    <button class="btn btn-sm btn-outline-success me-1" onclick="approveItem(${item.id})" title="Approve">
+                        <i class="bi bi-check"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger me-1" onclick="rejectItem(${item.id})" title="Reject">
+                        <i class="bi bi-x"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="editItem(${item.id})" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                ` : `
+                    <button class="btn btn-sm btn-outline-secondary" onclick="viewItem(${item.id})" title="View">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                `}
+            </td>
+        </tr>
+    `).join('');
+    
+    // Update pagination info
+    const start = currentPage * pageSize + 1;
+    const end = Math.min(start + items.length - 1, total);
+    document.getElementById('showingStart').textContent = start;
+    document.getElementById('showingEnd').textContent = end;
+    document.getElementById('showingTotal').textContent = total;
+    
+    renderPagination(total);
+}
+
+// Render pagination
+function renderPagination(total) {
+    const totalPages = Math.ceil(total / pageSize);
+    const pagination = document.getElementById('pagination');
+    
+    let html = '';
+    
+    // Previous
+    html += `
+        <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    for (let i = 0; i < totalPages && i < 10; i++) {
+        html += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i + 1}</a>
+            </li>
+        `;
+    }
+    
+    // Next
+    html += `
+        <li class="page-item ${currentPage >= totalPages - 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">Next</a>
+        </li>
+    `;
+    
+    pagination.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = Math.max(0, page);
+    loadQueue();
+}
+
+// Load campaigns for select
+async function loadCampaigns() {
+    try {
+        const response = await fetch('/api/v2/instantly/campaigns');
+        const data = await response.json();
+        campaigns = data.campaigns || [];
+        
+        const select = document.getElementById('editCampaign');
+        select.innerHTML = '<option value="">Auto-assign by tier</option>';
+        campaigns.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading campaigns:', error);
+    }
+}
+
+// Selection handling
+function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.item-checkbox:not(:disabled)').forEach(cb => {
+        cb.checked = checked;
+        if (checked) {
+            selectedItems.add(parseInt(cb.value));
+        } else {
+            selectedItems.delete(parseInt(cb.value));
+        }
+    });
+}
+
+function toggleItemSelect(id) {
+    if (selectedItems.has(id)) {
+        selectedItems.delete(id);
+    } else {
+        selectedItems.add(id);
+    }
+}
+
+// Bulk actions
+async function bulkApprove() {
+    if (selectedItems.size === 0) {
+        alert('No items selected');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/v2/instantly/queue/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_ids: Array.from(selectedItems) })
+        });
+        
+        const data = await response.json();
+        alert(`Approved ${data.approved} items`);
+        selectedItems.clear();
+        loadQueue();
+        loadStats();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function bulkReject() {
+    if (selectedItems.size === 0) {
+        alert('No items selected');
+        return;
+    }
+    
+    const notes = prompt('Rejection reason (optional):');
+    
+    try {
+        const response = await fetch('/api/v2/instantly/queue/reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                item_ids: Array.from(selectedItems),
+                notes: notes
+            })
+        });
+        
+        const data = await response.json();
+        alert(`Rejected ${data.rejected} items`);
+        selectedItems.clear();
+        loadQueue();
+        loadStats();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Single item actions
+async function approveItem(id) {
+    try {
+        const response = await fetch('/api/v2/instantly/queue/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_ids: [id] })
+        });
+        loadQueue();
+        loadStats();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function rejectItem(id) {
+    const notes = prompt('Rejection reason (optional):');
+    
+    try {
+        const response = await fetch('/api/v2/instantly/queue/reject', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_ids: [id], notes: notes })
+        });
+        loadQueue();
+        loadStats();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+function editItem(id) {
+    // TODO: Load item data and show modal
+    document.getElementById('editItemId').value = id;
+    new bootstrap.Modal(document.getElementById('editItemModal')).show();
+}
+
+async function saveItemEdit() {
+    const id = document.getElementById('editItemId').value;
+    
+    try {
+        const response = await fetch(`/api/v2/instantly/queue/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: document.getElementById('editEmail').value,
+                first_name: document.getElementById('editFirstName').value,
+                last_name: document.getElementById('editLastName').value,
+                campaign_id: document.getElementById('editCampaign').value,
+                notes: document.getElementById('editNotes').value
+            })
+        });
+        
+        bootstrap.Modal.getInstance(document.getElementById('editItemModal')).hide();
+        loadQueue();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Send approved
+async function sendApproved() {
+    if (!confirm('Send all approved leads to Instantly? This cannot be undone.')) {
+        return;
+    }
+    
+    document.getElementById('sendApprovedBtn').disabled = true;
+    document.getElementById('sendApprovedBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+    
+    try {
+        const response = await fetch('/api/v2/instantly/queue/send-approved', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        alert(`Sent: ${data.sent}\nFailed: ${data.failed}${data.errors?.length ? '\n\nErrors:\n' + data.errors.slice(0, 5).join('\n') : ''}`);
+        
+        loadQueue();
+        loadStats();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        document.getElementById('sendApprovedBtn').disabled = false;
+        document.getElementById('sendApprovedBtn').innerHTML = '<i class="bi bi-send"></i> Send Approved (<span id="approvedCount">0</span>)';
+        loadStats();
+    }
+}
+
+// Add leads to queue
+async function addLeadsToQueue() {
+    const tiers = [];
+    if (document.getElementById('queueTierA').checked) tiers.push('A');
+    if (document.getElementById('queueTierB').checked) tiers.push('B');
+    if (document.getElementById('queueTierC').checked) tiers.push('C');
+    
+    if (tiers.length === 0) {
+        alert('Please select at least one tier');
+        return;
+    }
+    
+    // Get lead IDs from server based on filters
+    const params = new URLSearchParams({
+        tiers: tiers.join(','),
+        require_email: document.getElementById('queueOnlyWithEmail').checked,
+        skip_sent: document.getElementById('queueSkipSent').checked
+    });
+    
+    try {
+        // First, get the lead IDs that match the criteria
+        const previewResponse = await fetch(`/api/v2/instantly/queue-preview?${params}`);
+        const previewData = await previewResponse.json();
+        
+        if (!previewData.lead_ids || previewData.lead_ids.length === 0) {
+            alert('No leads match the criteria');
+            return;
+        }
+        
+        // Add to queue
+        const response = await fetch('/api/v2/instantly/queue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lead_ids: previewData.lead_ids })
+        });
+        
+        const data = await response.json();
+        
+        alert(`Added: ${data.added}\nSkipped (already in queue): ${data.skipped}`);
+        
+        bootstrap.Modal.getInstance(document.getElementById('addToQueueModal')).hide();
+        loadQueue();
+        loadStats();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function previewQueue() {
+    const tiers = [];
+    if (document.getElementById('queueTierA').checked) tiers.push('A');
+    if (document.getElementById('queueTierB').checked) tiers.push('B');
+    if (document.getElementById('queueTierC').checked) tiers.push('C');
+    
+    const params = new URLSearchParams({
+        tiers: tiers.join(','),
+        require_email: document.getElementById('queueOnlyWithEmail').checked,
+        skip_sent: document.getElementById('queueSkipSent').checked
+    });
+    
+    try {
+        const response = await fetch(`/api/v2/instantly/queue-preview?${params}`);
+        const data = await response.json();
+        
+        document.getElementById('queuePreview').innerHTML = `
+            <i class="bi bi-check-circle text-success"></i>
+            <strong>${data.count}</strong> leads will be added to queue
+            <br><small class="text-muted">Tier breakdown: ${JSON.stringify(data.by_tier)}</small>
+        `;
+    } catch (error) {
+        document.getElementById('queuePreview').innerHTML = `
+            <i class="bi bi-exclamation-triangle text-danger"></i>
+            Error: ${error.message}
+        `;
+    }
+}
+
+// Helpers
+function getTierBadgeClass(tier) {
+    const classes = {
+        'A': 'bg-success',
+        'B': 'bg-primary',
+        'C': 'bg-secondary'
+    };
+    return classes[tier] || 'bg-dark';
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'pending': '<span class="badge bg-warning">Pending</span>',
+        'approved': '<span class="badge bg-success">Approved</span>',
+        'sent': '<span class="badge bg-info">Sent</span>',
+        'rejected': '<span class="badge bg-danger">Rejected</span>',
+        'failed': '<span class="badge bg-dark">Failed</span>'
+    };
+    return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, function(m) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m];
+    });
+}
+</script>
+{% endblock %}

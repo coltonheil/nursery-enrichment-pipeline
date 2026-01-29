@@ -1833,3 +1833,112 @@ if __name__ == '__main__':
     # Run the Flask app
     debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     app.run(host='0.0.0.0', port=5002, debug=debug_mode)
+
+# ============================================================================
+# V2 Modern UI Routes
+# ============================================================================
+
+@app.route('/v2/dashboard')
+def dashboard_v2():
+    """Modern dashboard with real-time stats and visualizations."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get overall stats
+    cursor.execute("SELECT COUNT(*) FROM leads")
+    total = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE gemini_status = 'enriched'")
+    google_enriched = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE website_text IS NOT NULL AND LENGTH(website_text) > 1000")
+    scraped = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE gemini_status IN ('enriched', 'complete')")
+    ai_enriched = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE score IS NOT NULL AND score > 0")
+    scored = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE tier IN ('A', 'B')")
+    a_plus_b = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE contact_name IS NOT NULL")
+    contacts = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE contact_email IS NOT NULL")
+    personal_emails = cursor.fetchone()[0]
+    
+    # Get tier distribution
+    cursor.execute("""
+        SELECT tier, COUNT(*) as count 
+        FROM leads 
+        GROUP BY tier
+    """)
+    tier_dist = {row[0]: row[1] for row in cursor.fetchall()}
+    
+    conn.close()
+    
+    stats = {
+        'total': total,
+        'google_enriched': google_enriched,
+        'scraped': scraped,
+        'ai_enriched': ai_enriched,
+        'scored': scored,
+        'a_plus_b': a_plus_b,
+        'contacts': contacts,
+        'personal_emails': personal_emails
+    }
+    
+    return render_template('dashboard_v2.html', 
+                         stats=stats, 
+                         tier_dist=tier_dist)
+
+@app.route('/v2/export')
+def export_v2():
+    """Modern export interface with presets and custom filters."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get stats for export page
+    cursor.execute("SELECT COUNT(*) FROM leads")
+    total = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE tier IN ('A', 'B')")
+    a_plus_b = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE contact_name IS NOT NULL")
+    contacts = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM leads WHERE contact_email IS NOT NULL")
+    personal_emails = cursor.fetchone()[0]
+    
+    # Get tier distribution
+    cursor.execute("""
+        SELECT tier, COUNT(*) as count 
+        FROM leads 
+        GROUP BY tier
+    """)
+    tier_dist = {row[0]: row[1] for row in cursor.fetchall()}
+    
+    conn.close()
+    
+    stats = {
+        'total': total,
+        'a_plus_b': a_plus_b,
+        'contacts': contacts,
+        'personal_emails': personal_emails
+    }
+    
+    return render_template('export_v2.html', 
+                         stats=stats,
+                         tier_dist=tier_dist)
+
+@app.template_filter('number_format')
+def number_format_filter(value):
+    """Format numbers with commas."""
+    try:
+        return "{:,}".format(int(value))
+    except (ValueError, TypeError):
+        return value
+

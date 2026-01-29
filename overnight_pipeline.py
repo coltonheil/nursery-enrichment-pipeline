@@ -173,8 +173,12 @@ def process_lead(lead: Dict, stats: PipelineStats) -> Dict:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Step 1: Scrape if needed
-        needs_scrape = lead.get('website_text') is None or len(lead.get('website_text', '') or '') < 2000
+        # Step 1: Scrape if needed (IDEMPOTENCY: Only if no text or text too short)
+        website_text = lead.get('website_text') or ''
+        needs_scrape = (
+            (not website_text or len(website_text) < 1000) and 
+            lead.get('scrape_status') != 'complete'
+        )
         
         if needs_scrape and lead.get('website'):
             try:
@@ -201,11 +205,21 @@ def process_lead(lead: Dict, stats: PipelineStats) -> Dict:
                 stats.leads_scraped += 1
                 stats.total_chars_scraped += len(lead['website_text'])
         
-        # Step 2: Gemini enrichment if we have text and need name OR email
+        # Step 2: Gemini enrichment if we have text and need name OR email (IDEMPOTENCY)
         if lead.get('website_text') and len(lead['website_text']) > 100:
-            needs_name = lead.get('owner_name') is None and lead.get('contact_name') is None
-            needs_email = lead.get('owner_email') is None and lead.get('contact_email') is None
-            needs_enrich = needs_name or needs_email
+            # Only enrich if BOTH name fields are NULL (haven't tried yet)
+            needs_name = (
+                lead.get('owner_name') is None and 
+                lead.get('contact_name') is None
+            )
+            # Only hunt email if BOTH email fields are NULL (haven't tried yet)
+            needs_email = (
+                lead.get('owner_email') is None and 
+                lead.get('contact_email') is None
+            )
+            # Skip if already processed (gemini_status == 'complete')
+            already_enriched = lead.get('gemini_status') == 'complete'
+            needs_enrich = (needs_name or needs_email) and not already_enriched
             
             if needs_enrich:
                 try:
@@ -250,11 +264,16 @@ def process_lead(lead: Dict, stats: PipelineStats) -> Dict:
                     stats.enrich_failures += 1
                     result['steps'].append(f"enrich:error:{str(e)[:30]}")
         
-        # Step 3: Email hunting if we have a name but no email
+        # Step 3: Email hunting if we have a name but no email (IDEMPOTENCY)
         has_name = lead.get('owner_name') or lead.get('contact_name')
-        has_email = lead.get('owner_email') or lead.get('contact_email')
+        # Only hunt if BOTH email fields are still NULL
+        needs_email_hunt = (
+            lead.get('owner_email') is None and 
+            lead.get('contact_email') is None
+        )
+        already_hunted = lead.get('email_hunt_status') == 'complete'
         
-        if has_name and not has_email and lead.get('website'):
+        if has_name and needs_email_hunt and not already_hunted and lead.get('website'):
             try:
                 email_result = hunt_email(
                     owner_name=lead.get('owner_name') or lead.get('contact_name'),
@@ -270,10 +289,12 @@ def process_lead(lead: Dict, stats: PipelineStats) -> Dict:
                         UPDATE leads
                         SET contact_email = ?,
                             email_method = ?,
-                            email_confidence = ?
+                            email_confidence = ?,
+                            email_hunt_status = 'complete',
+                            email_hunted_at = ?
                         WHERE id = ?
                     """, (email_result.email, email_result.method, 
-                          email_result.confidence, lead_id))
+                          email_result.confidence, datetime.now().isoformat(), lead_id))
                     
             except Exception as e:
                 result['steps'].append(f"hunt:error:{str(e)[:30]}")

@@ -1,251 +1,206 @@
 {% extends "base_v2.html" %}
 
 {% block title %}Hot Leads - Instantly Integration{% endblock %}
+{% block page_title %}Hot Leads{% endblock %}
+
+{% block header_actions %}
+<a href="/v2/campaign-stats"
+   class="inline-flex items-center gap-x-2 rounded-md bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500">
+    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+    </svg>
+    Campaign Stats
+</a>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-1">
-                        <i class="bi bi-fire text-danger"></i>
-                        Hot Leads
-                    </h2>
-                    <p class="text-muted mb-0">Leads that have replied or shown interest</p>
-                </div>
-                <div>
-                    <a href="/v2/campaign-stats" class="btn btn-outline-primary">
-                        <i class="bi bi-graph-up"></i> Campaign Stats
-                    </a>
-                </div>
-            </div>
+<div class="space-y-6" x-data="hotLeads()">
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-green-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-green-600" x-text="counts.replied"></p>
+            <p class="text-sm text-gray-500">Replied</p>
         </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card bg-success bg-opacity-10">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-success" id="repliedCount">0</h3>
-                    <small class="text-muted">Replied</small>
-                </div>
-            </div>
+        <div class="bg-blue-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-blue-600" x-text="counts.interested"></p>
+            <p class="text-sm text-gray-500">Interested</p>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-primary bg-opacity-10">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-primary" id="interestedCount">0</h3>
-                    <small class="text-muted">Interested</small>
-                </div>
-            </div>
+        <div class="bg-purple-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-purple-600" x-text="counts.meeting_booked"></p>
+            <p class="text-sm text-gray-500">Meeting Booked</p>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-info bg-opacity-10">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-info" id="meetingBookedCount">0</h3>
-                    <small class="text-muted">Meeting Booked</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-warning bg-opacity-10">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-warning" id="totalHotCount">0</h3>
-                    <small class="text-muted">Total Hot</small>
-                </div>
-            </div>
+        <div class="bg-orange-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-orange-600" x-text="leads.length"></p>
+            <p class="text-sm text-gray-500">Total Hot</p>
         </div>
     </div>
 
     <!-- Hot Leads Table -->
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Hot Leads</h5>
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadHotLeads()">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+            <h3 class="text-lg font-medium text-gray-900">
+                <span class="text-orange-500">🔥</span> Hot Leads
+            </h3>
+            <button @click="loadLeads()" class="text-sm text-primary-600 hover:text-primary-500">
+                <svg class="h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Refresh
             </button>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">When</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-if="loading">
                         <tr>
-                            <th>Business</th>
-                            <th>Contact</th>
-                            <th>Location</th>
-                            <th>Event</th>
-                            <th>When</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="hotLeadsTable">
-                        <tr>
-                            <td colspan="6" class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
+                            <td colspan="6" class="px-4 py-8 text-center">
+                                <svg class="animate-spin h-8 w-8 text-primary-600 mx-auto" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
                             </td>
                         </tr>
-                    </tbody>
-                </table>
-            </div>
+                    </template>
+                    <template x-if="!loading && leads.length === 0">
+                        <tr>
+                            <td colspan="6" class="px-4 py-12 text-center text-gray-500">
+                                <svg class="mx-auto h-16 w-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
+                                </svg>
+                                <p class="mt-4 text-lg font-medium">No hot leads yet</p>
+                                <p class="mt-1">Leads that reply or show interest will appear here</p>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-for="lead in leads" :key="lead.id + '-' + lead.event_time">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-gray-900" x-text="lead.business_name || 'Unknown'"></div>
+                                <div class="text-sm text-gray-500">
+                                    ID: <span x-text="lead.id"></span>
+                                    <span x-show="lead.tier" class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ml-1"
+                                          :class="{
+                                              'bg-green-100 text-green-800': lead.tier === 'A',
+                                              'bg-blue-100 text-blue-800': lead.tier === 'B',
+                                              'bg-gray-100 text-gray-800': lead.tier === 'C'
+                                          }"
+                                          x-text="'Tier ' + lead.tier"></span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div x-show="lead.owner_name" class="text-sm text-gray-900" x-text="lead.owner_name"></div>
+                                <code class="text-xs bg-gray-100 px-1 py-0.5 rounded" x-text="lead.owner_email || lead.contact_email || 'No email'"></code>
+                                <div x-show="lead.phone" class="text-xs text-gray-500" x-text="lead.phone"></div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500">
+                                <span x-text="(lead.city || '') + ', ' + (lead.state || '')"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                                      :class="{
+                                          'bg-green-100 text-green-800': lead.event_type === 'email.replied',
+                                          'bg-blue-100 text-blue-800': lead.event_type === 'lead.interested',
+                                          'bg-purple-100 text-purple-800': lead.event_type === 'lead.meeting_booked',
+                                          'bg-gray-100 text-gray-800': !lead.event_type
+                                      }"
+                                      x-text="formatEventType(lead.event_type)"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="text-sm text-gray-900" x-text="formatTimeAgo(lead.event_time)"></div>
+                                <div class="text-xs text-gray-500" x-text="formatDate(lead.event_time)"></div>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <a :href="lead.website || '#'" target="_blank" 
+                                   :class="{'opacity-50 pointer-events-none': !lead.website}"
+                                   class="inline-flex items-center p-1 rounded text-gray-600 hover:bg-gray-100" title="Visit Website">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                                    </svg>
+                                </a>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    loadHotLeads();
-});
-
-async function loadHotLeads() {
-    try {
-        const response = await fetch('/api/v2/instantly/hot-leads?limit=100');
-        const data = await response.json();
+function hotLeads() {
+    return {
+        leads: [],
+        loading: true,
+        counts: {
+            replied: 0,
+            interested: 0,
+            meeting_booked: 0
+        },
         
-        const leads = data.leads || [];
+        init() {
+            this.loadLeads();
+        },
         
-        // Count by type
-        const counts = {
-            'email.replied': 0,
-            'lead.interested': 0,
-            'lead.meeting_booked': 0
-        };
-        
-        leads.forEach(lead => {
-            if (counts.hasOwnProperty(lead.event_type)) {
-                counts[lead.event_type]++;
+        async loadLeads() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/v2/instantly/hot-leads?limit=100');
+                const data = await res.json();
+                this.leads = data.leads || [];
+                
+                // Count by type
+                this.counts = {replied: 0, interested: 0, meeting_booked: 0};
+                this.leads.forEach(lead => {
+                    if (lead.event_type === 'email.replied') this.counts.replied++;
+                    if (lead.event_type === 'lead.interested') this.counts.interested++;
+                    if (lead.event_type === 'lead.meeting_booked') this.counts.meeting_booked++;
+                });
+            } catch (e) {
+                console.error('Error loading hot leads:', e);
             }
-        });
+            this.loading = false;
+        },
         
-        document.getElementById('repliedCount').textContent = counts['email.replied'];
-        document.getElementById('interestedCount').textContent = counts['lead.interested'];
-        document.getElementById('meetingBookedCount').textContent = counts['lead.meeting_booked'];
-        document.getElementById('totalHotCount').textContent = leads.length;
+        formatEventType(type) {
+            const labels = {
+                'email.replied': '✉️ Replied',
+                'lead.interested': '👍 Interested',
+                'lead.meeting_booked': '📅 Meeting Booked',
+                'lead.meeting_completed': '✅ Meeting Done'
+            };
+            return labels[type] || (type ? type.split('.').pop() : 'Unknown');
+        },
         
-        renderHotLeads(leads);
-    } catch (error) {
-        console.error('Error loading hot leads:', error);
-        document.getElementById('hotLeadsTable').innerHTML = `
-            <tr><td colspan="6" class="text-center text-danger py-4">
-                Error loading hot leads: ${error.message}
-            </td></tr>
-        `;
-    }
-}
-
-function renderHotLeads(leads) {
-    const tbody = document.getElementById('hotLeadsTable');
-    
-    if (!leads || leads.length === 0) {
-        tbody.innerHTML = `
-            <tr><td colspan="6" class="text-center py-5 text-muted">
-                <i class="bi bi-hourglass" style="font-size: 3rem;"></i>
-                <p class="mt-3 mb-0">No hot leads yet</p>
-                <small>Leads that reply or show interest will appear here</small>
-            </td></tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = leads.map(lead => `
-        <tr>
-            <td>
-                <strong>${escapeHtml(lead.business_name || 'Unknown')}</strong>
-                <br>
-                <small class="text-muted">ID: ${lead.id}</small>
-                ${lead.tier ? `<span class="badge ${getTierBadgeClass(lead.tier)} ms-1">${lead.tier}</span>` : ''}
-            </td>
-            <td>
-                ${lead.owner_name ? `<div>${escapeHtml(lead.owner_name)}</div>` : ''}
-                <code class="small">${escapeHtml(lead.owner_email || lead.contact_email || 'No email')}</code>
-                ${lead.phone ? `<br><small class="text-muted">${escapeHtml(lead.phone)}</small>` : ''}
-            </td>
-            <td>
-                ${lead.city || ''}, ${lead.state || ''}
-            </td>
-            <td>
-                <span class="badge ${getEventBadgeClass(lead.event_type)}">${formatEventType(lead.event_type)}</span>
-            </td>
-            <td>
-                <small>${formatTimeAgo(lead.event_time)}</small>
-                <br><small class="text-muted">${formatDate(lead.event_time)}</small>
-            </td>
-            <td>
-                <div class="btn-group btn-group-sm">
-                    <a href="${lead.website || '#'}" target="_blank" class="btn btn-outline-secondary ${!lead.website ? 'disabled' : ''}" title="Visit Website">
-                        <i class="bi bi-globe"></i>
-                    </a>
-                    <button class="btn btn-outline-primary" onclick="viewLead(${lead.id})" title="View Details">
-                        <i class="bi bi-eye"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function viewLead(leadId) {
-    // Open lead in new tab or modal
-    window.open(`/lead/${leadId}`, '_blank');
-}
-
-function getTierBadgeClass(tier) {
-    const classes = {
-        'A': 'bg-success',
-        'B': 'bg-primary',
-        'C': 'bg-secondary'
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString();
+        },
+        
+        formatTimeAgo(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+            if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+            return `${Math.floor(diff / 604800)} weeks ago`;
+        }
     };
-    return classes[tier] || 'bg-dark';
-}
-
-function getEventBadgeClass(eventType) {
-    const classes = {
-        'email.replied': 'bg-success',
-        'lead.interested': 'bg-primary',
-        'lead.meeting_booked': 'bg-info',
-        'lead.meeting_completed': 'bg-success',
-        'email.opened': 'bg-secondary'
-    };
-    return classes[eventType] || 'bg-secondary';
-}
-
-function formatEventType(type) {
-    if (!type) return 'Unknown';
-    const labels = {
-        'email.replied': '✉️ Replied',
-        'lead.interested': '👍 Interested',
-        'lead.meeting_booked': '📅 Meeting Booked',
-        'lead.meeting_completed': '✅ Meeting Done'
-    };
-    return labels[type] || type.split('.').pop();
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString();
-}
-
-function formatTimeAgo(dateStr) {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    
-    if (diff < 60) return 'Just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
-    return `${Math.floor(diff / 604800)} weeks ago`;
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m]));
 }
 </script>
 {% endblock %}

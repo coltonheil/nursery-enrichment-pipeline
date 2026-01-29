@@ -1,726 +1,519 @@
 {% extends "base_v2.html" %}
 
 {% block title %}Outreach Queue - Instantly Integration{% endblock %}
+{% block page_title %}Outreach Queue{% endblock %}
+
+{% block header_actions %}
+<button onclick="sendApproved()"
+        id="sendApprovedBtn"
+        class="inline-flex items-center gap-x-2 rounded-md bg-green-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+    </svg>
+    Send Approved (<span id="approvedCount">0</span>)
+</button>
+<button onclick="showAddModal()"
+        class="inline-flex items-center gap-x-2 rounded-md bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 ml-2">
+    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+    Add Leads
+</button>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-1">
-                        <i class="bi bi-envelope-paper text-primary"></i>
-                        Outreach Queue
-                    </h2>
-                    <p class="text-muted mb-0">Review and approve leads before sending to Instantly</p>
-                </div>
-                <div>
-                    <button class="btn btn-success me-2" id="sendApprovedBtn" onclick="sendApproved()">
-                        <i class="bi bi-send"></i> Send Approved (<span id="approvedCount">0</span>)
-                    </button>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addToQueueModal">
-                        <i class="bi bi-plus-circle"></i> Add Leads
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
+<div class="space-y-6" x-data="outreachQueue()">
     <!-- Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-md-2">
-            <div class="card bg-light">
-                <div class="card-body text-center">
-                    <h3 class="mb-0" id="statTotal">0</h3>
-                    <small class="text-muted">Total</small>
-                </div>
-            </div>
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div class="bg-white rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-gray-900" x-text="stats.total || 0"></p>
+            <p class="text-sm text-gray-500">Total</p>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-warning bg-opacity-25">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-warning" id="statPending">0</h3>
-                    <small class="text-muted">Pending</small>
-                </div>
-            </div>
+        <div class="bg-yellow-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-yellow-600" x-text="stats.pending || 0"></p>
+            <p class="text-sm text-gray-500">Pending</p>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-success bg-opacity-25">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-success" id="statApproved">0</h3>
-                    <small class="text-muted">Approved</small>
-                </div>
-            </div>
+        <div class="bg-green-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-green-600" x-text="stats.approved || 0"></p>
+            <p class="text-sm text-gray-500">Approved</p>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-info bg-opacity-25">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-info" id="statSent">0</h3>
-                    <small class="text-muted">Sent</small>
-                </div>
-            </div>
+        <div class="bg-blue-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-blue-600" x-text="stats.sent || 0"></p>
+            <p class="text-sm text-gray-500">Sent</p>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-danger bg-opacity-25">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-danger" id="statRejected">0</h3>
-                    <small class="text-muted">Rejected</small>
-                </div>
-            </div>
+        <div class="bg-red-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-red-600" x-text="stats.rejected || 0"></p>
+            <p class="text-sm text-gray-500">Rejected</p>
         </div>
-        <div class="col-md-2">
-            <div class="card bg-secondary bg-opacity-25">
-                <div class="card-body text-center">
-                    <h3 class="mb-0 text-secondary" id="statFailed">0</h3>
-                    <small class="text-muted">Failed</small>
-                </div>
-            </div>
+        <div class="bg-gray-50 rounded-lg shadow p-4 text-center">
+            <p class="text-2xl font-bold text-gray-600" x-text="stats.failed || 0"></p>
+            <p class="text-sm text-gray-500">Failed</p>
         </div>
     </div>
 
     <!-- Filters -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <div class="row g-3 align-items-center">
-                <div class="col-auto">
-                    <label class="col-form-label">Status:</label>
-                </div>
-                <div class="col-auto">
-                    <select class="form-select" id="filterStatus" onchange="loadQueue()">
-                        <option value="">All</option>
-                        <option value="pending" selected>Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="sent">Sent</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="failed">Failed</option>
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <label class="col-form-label">Tier:</label>
-                </div>
-                <div class="col-auto">
-                    <select class="form-select" id="filterTier" onchange="loadQueue()">
-                        <option value="">All</option>
-                        <option value="A">Tier A</option>
-                        <option value="B">Tier B</option>
-                        <option value="C">Tier C</option>
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <button class="btn btn-outline-secondary" onclick="loadQueue()">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                </div>
-                <div class="col-auto ms-auto">
-                    <div class="btn-group">
-                        <button class="btn btn-outline-success" onclick="bulkApprove()">
-                            <i class="bi bi-check-all"></i> Approve Selected
-                        </button>
-                        <button class="btn btn-outline-danger" onclick="bulkReject()">
-                            <i class="bi bi-x-lg"></i> Reject Selected
-                        </button>
-                    </div>
-                </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex flex-wrap items-center gap-4">
+            <div>
+                <label class="text-sm font-medium text-gray-700">Status:</label>
+                <select x-model="filters.status" @change="loadQueue()" 
+                        class="ml-2 rounded-md border-gray-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                    <option value="">All</option>
+                    <option value="pending" selected>Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="sent">Sent</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-700">Tier:</label>
+                <select x-model="filters.tier" @change="loadQueue()"
+                        class="ml-2 rounded-md border-gray-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500">
+                    <option value="">All</option>
+                    <option value="A">Tier A</option>
+                    <option value="B">Tier B</option>
+                    <option value="C">Tier C</option>
+                </select>
+            </div>
+            <button @click="loadQueue()" 
+                    class="inline-flex items-center gap-x-1 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Refresh
+            </button>
+            <div class="ml-auto flex gap-2">
+                <button @click="bulkApprove()" 
+                        class="inline-flex items-center gap-x-1 rounded-md bg-green-100 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-200">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    Approve Selected
+                </button>
+                <button @click="bulkReject()"
+                        class="inline-flex items-center gap-x-1 rounded-md bg-red-100 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-200">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Reject Selected
+                </button>
             </div>
         </div>
     </div>
 
     <!-- Queue Table -->
-    <div class="card">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 40px;">
-                                <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll()">
-                            </th>
-                            <th>Lead</th>
-                            <th>Email</th>
-                            <th>Tier</th>
-                            <th>Campaign</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                            <th style="width: 150px;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="queueTableBody">
-                        <tr>
-                            <td colspan="8" class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left">
+                        <input type="checkbox" @change="toggleSelectAll()" x-model="selectAll"
+                               class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                <template x-if="loading">
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center">
+                            <div class="flex justify-center">
+                                <svg class="animate-spin h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <template x-if="!loading && items.length === 0">
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-gray-500">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
+                            <p class="mt-2">No items in queue</p>
+                            <p class="text-sm">Add leads to get started</p>
+                        </td>
+                    </tr>
+                </template>
+                <template x-for="item in items" :key="item.id">
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">
+                            <input type="checkbox" 
+                                   :value="item.id" 
+                                   x-model="selectedItems"
+                                   :disabled="item.status !== 'pending'"
+                                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50">
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-gray-900" x-text="item.company_name || 'N/A'"></div>
+                            <div class="text-sm text-gray-500" x-text="(item.first_name || '') + ' ' + (item.last_name || '')"></div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <code class="text-sm bg-gray-100 px-2 py-1 rounded" x-text="item.email"></code>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                                  :class="{
+                                      'bg-green-100 text-green-800': item.tier === 'A',
+                                      'bg-blue-100 text-blue-800': item.tier === 'B',
+                                      'bg-gray-100 text-gray-800': item.tier === 'C'
+                                  }"
+                                  x-text="'Tier ' + item.tier"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                                  :class="{
+                                      'bg-yellow-100 text-yellow-800': item.status === 'pending',
+                                      'bg-green-100 text-green-800': item.status === 'approved',
+                                      'bg-blue-100 text-blue-800': item.status === 'sent',
+                                      'bg-red-100 text-red-800': item.status === 'rejected',
+                                      'bg-gray-100 text-gray-800': item.status === 'failed'
+                                  }"
+                                  x-text="item.status.charAt(0).toUpperCase() + item.status.slice(1)"></span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-500" x-text="formatDate(item.created_at)"></td>
+                        <td class="px-4 py-3 text-right">
+                            <template x-if="item.status === 'pending'">
+                                <div class="flex justify-end gap-1">
+                                    <button @click="approveItem(item.id)" 
+                                            class="p-1 rounded text-green-600 hover:bg-green-100" title="Approve">
+                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                        </svg>
+                                    </button>
+                                    <button @click="rejectItem(item.id)"
+                                            class="p-1 rounded text-red-600 hover:bg-red-100" title="Reject">
+                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
                                 </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                            </template>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        
+        <!-- Pagination -->
+        <div class="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200">
+            <div class="text-sm text-gray-700">
+                Showing <span x-text="offset + 1"></span> to <span x-text="Math.min(offset + items.length, total)"></span> of <span x-text="total"></span>
             </div>
-        </div>
-        <div class="card-footer">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    Showing <span id="showingStart">0</span>-<span id="showingEnd">0</span> of <span id="showingTotal">0</span>
-                </div>
-                <nav>
-                    <ul class="pagination mb-0" id="pagination">
-                    </ul>
-                </nav>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Add to Queue Modal -->
-<div class="modal fade" id="addToQueueModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Add Leads to Queue</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Select Tier(s) to Queue:</label>
-                    <div class="btn-group w-100" role="group">
-                        <input type="checkbox" class="btn-check" id="queueTierA" value="A" checked>
-                        <label class="btn btn-outline-primary" for="queueTierA">Tier A</label>
-                        <input type="checkbox" class="btn-check" id="queueTierB" value="B" checked>
-                        <label class="btn btn-outline-primary" for="queueTierB">Tier B</label>
-                        <input type="checkbox" class="btn-check" id="queueTierC" value="C">
-                        <label class="btn btn-outline-primary" for="queueTierC">Tier C</label>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Filter Options:</label>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="queueOnlyWithEmail" checked>
-                        <label class="form-check-label" for="queueOnlyWithEmail">Only leads with email addresses</label>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="queueSkipSent" checked>
-                        <label class="form-check-label" for="queueSkipSent">Skip leads already sent to Instantly</label>
-                    </div>
-                </div>
-                <div class="alert alert-info" id="queuePreview">
-                    <i class="bi bi-info-circle"></i> Click "Preview" to see how many leads will be added
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" onclick="previewQueue()">
-                    <i class="bi bi-eye"></i> Preview
+            <div class="flex gap-2">
+                <button @click="prevPage()" :disabled="offset === 0"
+                        class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    Previous
                 </button>
-                <button type="button" class="btn btn-primary" onclick="addLeadsToQueue()">
-                    <i class="bi bi-plus-circle"></i> Add to Queue
+                <button @click="nextPage()" :disabled="offset + items.length >= total"
+                        class="px-3 py-1 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
                 </button>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Edit Item Modal -->
-<div class="modal fade" id="editItemModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Edit Queue Item</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="editItemId">
-                <div class="mb-3">
-                    <label class="form-label">Email</label>
-                    <input type="email" class="form-control" id="editEmail">
-                </div>
-                <div class="row mb-3">
-                    <div class="col">
-                        <label class="form-label">First Name</label>
-                        <input type="text" class="form-control" id="editFirstName">
+    <!-- Add to Queue Modal -->
+    <div x-show="showAddModal" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto" 
+         @keydown.escape.window="showAddModal = false">
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="showAddModal = false"></div>
+            <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Add Leads to Queue</h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Tiers:</label>
+                        <div class="flex gap-2">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="addModal.tiers" value="A" class="rounded border-gray-300 text-primary-600">
+                                <span class="ml-2 text-sm">Tier A</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="addModal.tiers" value="B" class="rounded border-gray-300 text-primary-600">
+                                <span class="ml-2 text-sm">Tier B</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" x-model="addModal.tiers" value="C" class="rounded border-gray-300 text-primary-600">
+                                <span class="ml-2 text-sm">Tier C</span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="col">
-                        <label class="form-label">Last Name</label>
-                        <input type="text" class="form-control" id="editLastName">
+                    
+                    <div>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" x-model="addModal.requireEmail" class="rounded border-gray-300 text-primary-600">
+                            <span class="ml-2 text-sm">Only leads with email addresses</span>
+                        </label>
+                    </div>
+                    
+                    <div>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" x-model="addModal.skipSent" class="rounded border-gray-300 text-primary-600">
+                            <span class="ml-2 text-sm">Skip leads already sent</span>
+                        </label>
+                    </div>
+                    
+                    <div class="bg-blue-50 rounded-lg p-4" x-show="addModal.preview">
+                        <p class="text-sm text-blue-800">
+                            <strong x-text="addModal.previewCount"></strong> leads will be added to queue
+                        </p>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Campaign</label>
-                    <select class="form-select" id="editCampaign">
-                        <option value="">Auto-assign by tier</option>
-                        <!-- Populated dynamically -->
-                    </select>
+                
+                <div class="mt-6 flex justify-end gap-3">
+                    <button @click="previewAdd()" class="px-4 py-2 rounded-md border text-sm font-medium">
+                        Preview
+                    </button>
+                    <button @click="addLeads()" class="px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-500">
+                        Add to Queue
+                    </button>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" id="editNotes" rows="2"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveItemEdit()">Save Changes</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// State
-let currentPage = 0;
-const pageSize = 50;
-let selectedItems = new Set();
-let campaigns = [];
-
-// Initialize
-document.addEventListener('DOMContentLoaded', function() {
-    loadStats();
-    loadQueue();
-    loadCampaigns();
-});
-
-// Load queue stats
-async function loadStats() {
-    try {
-        const response = await fetch('/api/v2/instantly/queue/stats');
-        const data = await response.json();
+function outreachQueue() {
+    return {
+        items: [],
+        total: 0,
+        offset: 0,
+        limit: 50,
+        loading: true,
+        selectedItems: [],
+        selectAll: false,
+        showAddModal: false,
+        filters: {
+            status: 'pending',
+            tier: ''
+        },
+        stats: {
+            total: 0,
+            pending: 0,
+            approved: 0,
+            sent: 0,
+            rejected: 0,
+            failed: 0
+        },
+        addModal: {
+            tiers: ['A', 'B'],
+            requireEmail: true,
+            skipSent: true,
+            preview: false,
+            previewCount: 0,
+            leadIds: []
+        },
         
-        document.getElementById('statTotal').textContent = data.total || 0;
-        document.getElementById('statPending').textContent = data.by_status?.pending || 0;
-        document.getElementById('statApproved').textContent = data.by_status?.approved || 0;
-        document.getElementById('statSent').textContent = data.by_status?.sent || 0;
-        document.getElementById('statRejected').textContent = data.by_status?.rejected || 0;
-        document.getElementById('statFailed').textContent = data.by_status?.failed || 0;
+        init() {
+            this.loadStats();
+            this.loadQueue();
+        },
         
-        document.getElementById('approvedCount').textContent = data.by_status?.approved || 0;
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
-}
-
-// Load queue items
-async function loadQueue() {
-    const status = document.getElementById('filterStatus').value;
-    const tier = document.getElementById('filterTier').value;
-    
-    const params = new URLSearchParams({
-        limit: pageSize,
-        offset: currentPage * pageSize
-    });
-    
-    if (status) params.append('status', status);
-    if (tier) params.append('tier', tier);
-    
-    try {
-        const response = await fetch(`/api/v2/instantly/queue?${params}`);
-        const data = await response.json();
+        async loadStats() {
+            try {
+                const res = await fetch('/api/v2/instantly/queue/stats');
+                const data = await res.json();
+                this.stats = {
+                    total: data.total || 0,
+                    pending: data.by_status?.pending || 0,
+                    approved: data.by_status?.approved || 0,
+                    sent: data.by_status?.sent || 0,
+                    rejected: data.by_status?.rejected || 0,
+                    failed: data.by_status?.failed || 0
+                };
+                document.getElementById('approvedCount').textContent = this.stats.approved;
+            } catch (e) {
+                console.error('Error loading stats:', e);
+            }
+        },
         
-        renderQueue(data.items, data.total);
-    } catch (error) {
-        console.error('Error loading queue:', error);
-        document.getElementById('queueTableBody').innerHTML = `
-            <tr><td colspan="8" class="text-center text-danger py-4">
-                Error loading queue: ${error.message}
-            </td></tr>
-        `;
-    }
-}
-
-// Render queue table
-function renderQueue(items, total) {
-    const tbody = document.getElementById('queueTableBody');
-    
-    if (!items || items.length === 0) {
-        tbody.innerHTML = `
-            <tr><td colspan="8" class="text-center py-4 text-muted">
-                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
-                <p class="mb-0 mt-2">No items in queue</p>
-            </td></tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = items.map(item => `
-        <tr data-id="${item.id}">
-            <td>
-                <input type="checkbox" class="form-check-input item-checkbox" 
-                       value="${item.id}" onchange="toggleItemSelect(${item.id})"
-                       ${selectedItems.has(item.id) ? 'checked' : ''}
-                       ${item.status !== 'pending' ? 'disabled' : ''}>
-            </td>
-            <td>
-                <strong>${escapeHtml(item.company_name || 'N/A')}</strong>
-                <br><small class="text-muted">${escapeHtml(item.first_name || '')} ${escapeHtml(item.last_name || '')}</small>
-            </td>
-            <td>
-                <code>${escapeHtml(item.email)}</code>
-            </td>
-            <td>
-                <span class="badge ${getTierBadgeClass(item.tier)}">${item.tier}</span>
-            </td>
-            <td>
-                <small class="text-muted">${item.campaign_id ? item.campaign_id.substring(0, 8) + '...' : 'Auto'}</small>
-            </td>
-            <td>
-                ${getStatusBadge(item.status)}
-            </td>
-            <td>
-                <small>${formatDate(item.created_at)}</small>
-            </td>
-            <td>
-                ${item.status === 'pending' ? `
-                    <button class="btn btn-sm btn-outline-success me-1" onclick="approveItem(${item.id})" title="Approve">
-                        <i class="bi bi-check"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger me-1" onclick="rejectItem(${item.id})" title="Reject">
-                        <i class="bi bi-x"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="editItem(${item.id})" title="Edit">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                ` : `
-                    <button class="btn btn-sm btn-outline-secondary" onclick="viewItem(${item.id})" title="View">
-                        <i class="bi bi-eye"></i>
-                    </button>
-                `}
-            </td>
-        </tr>
-    `).join('');
-    
-    // Update pagination info
-    const start = currentPage * pageSize + 1;
-    const end = Math.min(start + items.length - 1, total);
-    document.getElementById('showingStart').textContent = start;
-    document.getElementById('showingEnd').textContent = end;
-    document.getElementById('showingTotal').textContent = total;
-    
-    renderPagination(total);
-}
-
-// Render pagination
-function renderPagination(total) {
-    const totalPages = Math.ceil(total / pageSize);
-    const pagination = document.getElementById('pagination');
-    
-    let html = '';
-    
-    // Previous
-    html += `
-        <li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">Previous</a>
-        </li>
-    `;
-    
-    // Page numbers
-    for (let i = 0; i < totalPages && i < 10; i++) {
-        html += `
-            <li class="page-item ${i === currentPage ? 'active' : ''}">
-                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i + 1}</a>
-            </li>
-        `;
-    }
-    
-    // Next
-    html += `
-        <li class="page-item ${currentPage >= totalPages - 1 ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">Next</a>
-        </li>
-    `;
-    
-    pagination.innerHTML = html;
-}
-
-function goToPage(page) {
-    currentPage = Math.max(0, page);
-    loadQueue();
-}
-
-// Load campaigns for select
-async function loadCampaigns() {
-    try {
-        const response = await fetch('/api/v2/instantly/campaigns');
-        const data = await response.json();
-        campaigns = data.campaigns || [];
+        async loadQueue() {
+            this.loading = true;
+            const params = new URLSearchParams({
+                limit: this.limit,
+                offset: this.offset
+            });
+            if (this.filters.status) params.append('status', this.filters.status);
+            if (this.filters.tier) params.append('tier', this.filters.tier);
+            
+            try {
+                const res = await fetch(`/api/v2/instantly/queue?${params}`);
+                const data = await res.json();
+                this.items = data.items || [];
+                this.total = data.total || 0;
+            } catch (e) {
+                console.error('Error loading queue:', e);
+            }
+            this.loading = false;
+        },
         
-        const select = document.getElementById('editCampaign');
-        select.innerHTML = '<option value="">Auto-assign by tier</option>';
-        campaigns.forEach(c => {
-            select.innerHTML += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
-        });
-    } catch (error) {
-        console.error('Error loading campaigns:', error);
-    }
-}
-
-// Selection handling
-function toggleSelectAll() {
-    const checked = document.getElementById('selectAll').checked;
-    document.querySelectorAll('.item-checkbox:not(:disabled)').forEach(cb => {
-        cb.checked = checked;
-        if (checked) {
-            selectedItems.add(parseInt(cb.value));
-        } else {
-            selectedItems.delete(parseInt(cb.value));
+        toggleSelectAll() {
+            if (this.selectAll) {
+                this.selectedItems = this.items.filter(i => i.status === 'pending').map(i => i.id);
+            } else {
+                this.selectedItems = [];
+            }
+        },
+        
+        async approveItem(id) {
+            await fetch('/api/v2/instantly/queue/approve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ item_ids: [id] })
+            });
+            this.loadQueue();
+            this.loadStats();
+        },
+        
+        async rejectItem(id) {
+            const notes = prompt('Rejection reason (optional):');
+            await fetch('/api/v2/instantly/queue/reject', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ item_ids: [id], notes: notes })
+            });
+            this.loadQueue();
+            this.loadStats();
+        },
+        
+        async bulkApprove() {
+            if (this.selectedItems.length === 0) {
+                alert('No items selected');
+                return;
+            }
+            await fetch('/api/v2/instantly/queue/approve', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ item_ids: this.selectedItems })
+            });
+            this.selectedItems = [];
+            this.selectAll = false;
+            this.loadQueue();
+            this.loadStats();
+        },
+        
+        async bulkReject() {
+            if (this.selectedItems.length === 0) {
+                alert('No items selected');
+                return;
+            }
+            const notes = prompt('Rejection reason (optional):');
+            await fetch('/api/v2/instantly/queue/reject', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ item_ids: this.selectedItems, notes: notes })
+            });
+            this.selectedItems = [];
+            this.selectAll = false;
+            this.loadQueue();
+            this.loadStats();
+        },
+        
+        async previewAdd() {
+            const params = new URLSearchParams({
+                tiers: this.addModal.tiers.join(','),
+                require_email: this.addModal.requireEmail,
+                skip_sent: this.addModal.skipSent
+            });
+            
+            try {
+                const res = await fetch(`/api/v2/instantly/queue-preview?${params}`);
+                const data = await res.json();
+                this.addModal.preview = true;
+                this.addModal.previewCount = data.count;
+                this.addModal.leadIds = data.lead_ids;
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        },
+        
+        async addLeads() {
+            if (!this.addModal.preview || this.addModal.leadIds.length === 0) {
+                await this.previewAdd();
+            }
+            
+            if (this.addModal.leadIds.length === 0) {
+                alert('No leads match the criteria');
+                return;
+            }
+            
+            try {
+                const res = await fetch('/api/v2/instantly/queue', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ lead_ids: this.addModal.leadIds })
+                });
+                const data = await res.json();
+                alert(`Added: ${data.added}\nSkipped: ${data.skipped}`);
+                this.showAddModal = false;
+                this.addModal.preview = false;
+                this.loadQueue();
+                this.loadStats();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        },
+        
+        prevPage() {
+            if (this.offset > 0) {
+                this.offset -= this.limit;
+                this.loadQueue();
+            }
+        },
+        
+        nextPage() {
+            if (this.offset + this.items.length < this.total) {
+                this.offset += this.limit;
+                this.loadQueue();
+            }
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
-    });
+    };
 }
 
-function toggleItemSelect(id) {
-    if (selectedItems.has(id)) {
-        selectedItems.delete(id);
-    } else {
-        selectedItems.add(id);
-    }
+function showAddModal() {
+    Alpine.$data(document.querySelector('[x-data]')).showAddModal = true;
 }
 
-// Bulk actions
-async function bulkApprove() {
-    if (selectedItems.size === 0) {
-        alert('No items selected');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/v2/instantly/queue/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_ids: Array.from(selectedItems) })
-        });
-        
-        const data = await response.json();
-        alert(`Approved ${data.approved} items`);
-        selectedItems.clear();
-        loadQueue();
-        loadStats();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-async function bulkReject() {
-    if (selectedItems.size === 0) {
-        alert('No items selected');
-        return;
-    }
-    
-    const notes = prompt('Rejection reason (optional):');
-    
-    try {
-        const response = await fetch('/api/v2/instantly/queue/reject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                item_ids: Array.from(selectedItems),
-                notes: notes
-            })
-        });
-        
-        const data = await response.json();
-        alert(`Rejected ${data.rejected} items`);
-        selectedItems.clear();
-        loadQueue();
-        loadStats();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-// Single item actions
-async function approveItem(id) {
-    try {
-        const response = await fetch('/api/v2/instantly/queue/approve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_ids: [id] })
-        });
-        loadQueue();
-        loadStats();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-async function rejectItem(id) {
-    const notes = prompt('Rejection reason (optional):');
-    
-    try {
-        const response = await fetch('/api/v2/instantly/queue/reject', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item_ids: [id], notes: notes })
-        });
-        loadQueue();
-        loadStats();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-function editItem(id) {
-    // TODO: Load item data and show modal
-    document.getElementById('editItemId').value = id;
-    new bootstrap.Modal(document.getElementById('editItemModal')).show();
-}
-
-async function saveItemEdit() {
-    const id = document.getElementById('editItemId').value;
-    
-    try {
-        const response = await fetch(`/api/v2/instantly/queue/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                email: document.getElementById('editEmail').value,
-                first_name: document.getElementById('editFirstName').value,
-                last_name: document.getElementById('editLastName').value,
-                campaign_id: document.getElementById('editCampaign').value,
-                notes: document.getElementById('editNotes').value
-            })
-        });
-        
-        bootstrap.Modal.getInstance(document.getElementById('editItemModal')).hide();
-        loadQueue();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-// Send approved
 async function sendApproved() {
     if (!confirm('Send all approved leads to Instantly? This cannot be undone.')) {
         return;
     }
     
-    document.getElementById('sendApprovedBtn').disabled = true;
-    document.getElementById('sendApprovedBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sending...';
+    const btn = document.getElementById('sendApprovedBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Sending...';
     
     try {
-        const response = await fetch('/api/v2/instantly/queue/send-approved', {
+        const res = await fetch('/api/v2/instantly/queue/send-approved', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: {'Content-Type': 'application/json'}
         });
-        
-        const data = await response.json();
-        
-        alert(`Sent: ${data.sent}\nFailed: ${data.failed}${data.errors?.length ? '\n\nErrors:\n' + data.errors.slice(0, 5).join('\n') : ''}`);
-        
-        loadQueue();
-        loadStats();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    } finally {
-        document.getElementById('sendApprovedBtn').disabled = false;
-        document.getElementById('sendApprovedBtn').innerHTML = '<i class="bi bi-send"></i> Send Approved (<span id="approvedCount">0</span>)';
-        loadStats();
-    }
-}
-
-// Add leads to queue
-async function addLeadsToQueue() {
-    const tiers = [];
-    if (document.getElementById('queueTierA').checked) tiers.push('A');
-    if (document.getElementById('queueTierB').checked) tiers.push('B');
-    if (document.getElementById('queueTierC').checked) tiers.push('C');
-    
-    if (tiers.length === 0) {
-        alert('Please select at least one tier');
-        return;
+        const data = await res.json();
+        alert(`Sent: ${data.sent}\nFailed: ${data.failed}`);
+        location.reload();
+    } catch (e) {
+        alert('Error: ' + e.message);
     }
     
-    // Get lead IDs from server based on filters
-    const params = new URLSearchParams({
-        tiers: tiers.join(','),
-        require_email: document.getElementById('queueOnlyWithEmail').checked,
-        skip_sent: document.getElementById('queueSkipSent').checked
-    });
-    
-    try {
-        // First, get the lead IDs that match the criteria
-        const previewResponse = await fetch(`/api/v2/instantly/queue-preview?${params}`);
-        const previewData = await previewResponse.json();
-        
-        if (!previewData.lead_ids || previewData.lead_ids.length === 0) {
-            alert('No leads match the criteria');
-            return;
-        }
-        
-        // Add to queue
-        const response = await fetch('/api/v2/instantly/queue', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lead_ids: previewData.lead_ids })
-        });
-        
-        const data = await response.json();
-        
-        alert(`Added: ${data.added}\nSkipped (already in queue): ${data.skipped}`);
-        
-        bootstrap.Modal.getInstance(document.getElementById('addToQueueModal')).hide();
-        loadQueue();
-        loadStats();
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-}
-
-async function previewQueue() {
-    const tiers = [];
-    if (document.getElementById('queueTierA').checked) tiers.push('A');
-    if (document.getElementById('queueTierB').checked) tiers.push('B');
-    if (document.getElementById('queueTierC').checked) tiers.push('C');
-    
-    const params = new URLSearchParams({
-        tiers: tiers.join(','),
-        require_email: document.getElementById('queueOnlyWithEmail').checked,
-        skip_sent: document.getElementById('queueSkipSent').checked
-    });
-    
-    try {
-        const response = await fetch(`/api/v2/instantly/queue-preview?${params}`);
-        const data = await response.json();
-        
-        document.getElementById('queuePreview').innerHTML = `
-            <i class="bi bi-check-circle text-success"></i>
-            <strong>${data.count}</strong> leads will be added to queue
-            <br><small class="text-muted">Tier breakdown: ${JSON.stringify(data.by_tier)}</small>
-        `;
-    } catch (error) {
-        document.getElementById('queuePreview').innerHTML = `
-            <i class="bi bi-exclamation-triangle text-danger"></i>
-            Error: ${error.message}
-        `;
-    }
-}
-
-// Helpers
-function getTierBadgeClass(tier) {
-    const classes = {
-        'A': 'bg-success',
-        'B': 'bg-primary',
-        'C': 'bg-secondary'
-    };
-    return classes[tier] || 'bg-dark';
-}
-
-function getStatusBadge(status) {
-    const badges = {
-        'pending': '<span class="badge bg-warning">Pending</span>',
-        'approved': '<span class="badge bg-success">Approved</span>',
-        'sent': '<span class="badge bg-info">Sent</span>',
-        'rejected': '<span class="badge bg-danger">Rejected</span>',
-        'failed': '<span class="badge bg-dark">Failed</span>'
-    };
-    return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return 'N/A';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, function(m) {
-        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m];
-    });
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg> Send Approved (<span id="approvedCount">0</span>)';
 }
 </script>
 {% endblock %}

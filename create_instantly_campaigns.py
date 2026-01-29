@@ -57,7 +57,8 @@ EMAIL_SEQUENCES = {
     "steps": [
         {
             "step_number": 1,
-            "wait_time_days": 0,
+            "type": "email",
+            "delay": 0,
             "variants": [
                 {
                     "subject": "Free Worm Casting Sample for {{company_name}}?",
@@ -79,7 +80,8 @@ Best regards,
         },
         {
             "step_number": 2,
-            "wait_time_days": 3,
+            "type": "email",
+            "delay": 3,
             "variants": [
                 {
                     "subject": "Re: Free worm casting sample for {{company_name}}",

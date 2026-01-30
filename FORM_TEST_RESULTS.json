@@ -1,0 +1,134 @@
+[
+  {
+    "name": "Carpenter Farms",
+    "url": "https://carpenterfarmsadrian.com/contact",
+    "expected_success": true,
+    "actual_success": true,
+    "fields_found": [
+      {
+        "type": "name",
+        "selector": "#wpforms-3784-field_0",
+        "element": "input"
+      },
+      {
+        "type": "name",
+        "selector": "#wpforms-3784-field_0-last",
+        "element": "input"
+      },
+      {
+        "type": "email",
+        "selector": "#wpforms-3784-field_1",
+        "element": "input"
+      },
+      {
+        "type": "message",
+        "selector": "#wpforms-3784-field_2",
+        "element": "textarea"
+      }
+    ],
+    "detection_strategy": "wpforms",
+    "issues": [],
+    "error": null,
+    "platform": "wpforms",
+    "page_blocked": false,
+    "matches_expected": true
+  },
+  {
+    "name": "Andy Mast",
+    "url": "https://andymastgreenhouses.com/contact",
+    "expected_success": true,
+    "actual_success": true,
+    "fields_found": [
+      {
+        "type": "name",
+        "selector": "#your_name",
+        "element": "input"
+      },
+      {
+        "type": "email",
+        "selector": "#email_address",
+        "element": "input"
+      },
+      {
+        "type": "phone",
+        "selector": "#phone_number",
+        "element": "input"
+      },
+      {
+        "type": "message",
+        "selector": "textarea[id=\"How may we help you? \"]",
+        "element": "textarea"
+      }
+    ],
+    "detection_strategy": "fusion_builder",
+    "issues": [],
+    "error": null,
+    "platform": "fusion_builder",
+    "page_blocked": false,
+    "matches_expected": true
+  },
+  {
+    "name": "Bruce Helsel",
+    "url": "https://brucehelsel.com/contact-us",
+    "expected_success": true,
+    "actual_success": true,
+    "fields_found": [
+      {
+        "type": "name",
+        "selector": "input[id=\"1720875786\"]",
+        "element": "input"
+      },
+      {
+        "type": "phone",
+        "selector": "input[id=\"1026546555\"]",
+        "element": "input"
+      },
+      {
+        "type": "email",
+        "selector": "input[id=\"1137101505\"]",
+        "element": "input"
+      },
+      {
+        "type": "message",
+        "selector": "textarea[id=\"1449514329\"]",
+        "element": "textarea"
+      }
+    ],
+    "detection_strategy": "dudamobile",
+    "issues": [],
+    "error": null,
+    "platform": "dudamobile",
+    "page_blocked": false,
+    "matches_expected": true
+  },
+  {
+    "name": "Sprig Native",
+    "url": "https://sprignativenursery.com",
+    "expected_success": false,
+    "actual_success": false,
+    "fields_found": [],
+    "detection_strategy": "none",
+    "issues": [
+      "No contact form detected"
+    ],
+    "error": null,
+    "platform": "shopify",
+    "page_blocked": false,
+    "matches_expected": true
+  },
+  {
+    "name": "Bear Creek",
+    "url": "https://bearcreekorganicfarm.com",
+    "expected_success": false,
+    "actual_success": false,
+    "fields_found": [],
+    "detection_strategy": "none",
+    "issues": [
+      "No contact form detected"
+    ],
+    "error": null,
+    "platform": "shopify",
+    "page_blocked": false,
+    "matches_expected": true
+  }
+]

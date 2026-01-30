@@ -1,0 +1,159 @@
+[
+  {
+    "name": "Carpenter Farms \u2705",
+    "url": "https://carpenterfarmsadrian.com/contact",
+    "success": true,
+    "fields": [
+      {
+        "type": "name",
+        "selector": "#wpforms-3784-field_0"
+      },
+      {
+        "type": "name",
+        "selector": "#wpforms-3784-field_0-last"
+      },
+      {
+        "type": "email",
+        "selector": "#wpforms-3784-field_1"
+      },
+      {
+        "type": "message",
+        "selector": "#wpforms-3784-field_2"
+      }
+    ],
+    "strategy": "wpforms",
+    "platform": "wpforms",
+    "issues": [],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.9
+  },
+  {
+    "name": "Sprig Native Plant",
+    "url": "https://sprignativenursery.com",
+    "success": false,
+    "fields": [],
+    "strategy": "none",
+    "platform": "shopify",
+    "issues": [
+      "No contact form detected"
+    ],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.0
+  },
+  {
+    "name": "Dulcet Farm",
+    "url": "https://dulcetfarm.com",
+    "success": false,
+    "fields": [],
+    "strategy": "none",
+    "platform": "squarespace",
+    "issues": [
+      "No contact form detected"
+    ],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.0
+  },
+  {
+    "name": "Andy Mast",
+    "url": "https://andymastgreenhouses.com/contact",
+    "success": true,
+    "fields": [
+      {
+        "type": "name",
+        "selector": "#your_name"
+      },
+      {
+        "type": "email",
+        "selector": "#email_address"
+      },
+      {
+        "type": "phone",
+        "selector": "#phone_number"
+      },
+      {
+        "type": "message",
+        "selector": "textarea[id=\"How may we help you? \"]"
+      }
+    ],
+    "strategy": "fusion_builder",
+    "platform": "fusion_builder",
+    "issues": [],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.9
+  },
+  {
+    "name": "Bear Creek Organics",
+    "url": "https://bearcreekorganicfarm.com",
+    "success": false,
+    "fields": [],
+    "strategy": "none",
+    "platform": "shopify",
+    "issues": [
+      "No contact form detected"
+    ],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.0
+  },
+  {
+    "name": "Botanically Correct",
+    "url": "https://goodvibescannabiscompany.com/contact-us",
+    "success": false,
+    "fields": [],
+    "strategy": "none",
+    "platform": "fusion_builder",
+    "issues": [
+      "No contact form detected"
+    ],
+    "blocked": false,
+    "http_status": 404,
+    "confidence": 0.0
+  },
+  {
+    "name": "Bruce Helsel",
+    "url": "https://brucehelsel.com/contact-us",
+    "success": true,
+    "fields": [
+      {
+        "type": "name",
+        "selector": "input[id=\"1720875786\"]"
+      },
+      {
+        "type": "phone",
+        "selector": "input[id=\"1026546555\"]"
+      },
+      {
+        "type": "email",
+        "selector": "input[id=\"1137101505\"]"
+      },
+      {
+        "type": "message",
+        "selector": "textarea[id=\"1449514329\"]"
+      }
+    ],
+    "strategy": "dudamobile",
+    "platform": "dudamobile",
+    "issues": [],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.9
+  },
+  {
+    "name": "City Farmer",
+    "url": "https://thecityfarmergrandhaven.org/contact",
+    "success": false,
+    "fields": [],
+    "strategy": "none",
+    "platform": null,
+    "issues": [
+      "No contact form detected"
+    ],
+    "blocked": false,
+    "http_status": 200,
+    "confidence": 0.0
+  }
+]

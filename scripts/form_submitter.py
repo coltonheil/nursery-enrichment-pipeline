@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 from playwright_stealth import Stealth
 
-from scripts.form_detector import FormDetector, FormAnalysis, FieldType, ProtectionType
+from scripts.form_detector_v2 import FormDetectorV2, FormAnalysis, FieldType, ProtectionType, safe_css_selector
 from scripts.human_behavior import HumanBehavior
 
 # Setup logging
@@ -103,7 +103,7 @@ class FormSubmitter:
         """
         self.headless = headless
         self.use_proxy = use_proxy
-        self.form_detector = FormDetector()
+        self.form_detector = FormDetectorV2()
         self.human_behavior = HumanBehavior()
         self.templates = self._load_templates()
         

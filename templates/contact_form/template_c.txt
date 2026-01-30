@@ -1,0 +1,15 @@
+Hi!
+
+Found {{business_name}} while researching nurseries in {{state}} and wanted to reach out.
+
+I'm Colton with Sweet Leaf Soil - we're a family operation producing premium worm castings right here in the Midwest. Our vermicompost is popular with nurseries and greenhouses for improving soil biology and plant health.
+
+I'd love to send you a free sample bag - no commitment, just want to introduce our product to quality growers in the region.
+
+Let me know if you're interested! You can reply here or email me at colton@sweetleafsoil.com.
+
+Colton
+Sweet Leaf Soil
+{{city}}, Iowa
+
+[{{tracking_id}}]

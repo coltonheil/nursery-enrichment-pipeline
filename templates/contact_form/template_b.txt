@@ -1,0 +1,16 @@
+Hello,
+
+Quick question - are you happy with your current soil amendments?
+
+I'm Colton with Sweet Leaf Soil, and we've been helping Midwest growers improve transplant success rates and plant vigor with our premium worm castings.
+
+Many nurseries mix our vermicompost into potting soil or use it as a top dress - the results speak for themselves: stronger roots, healthier plants, better customer satisfaction.
+
+I'd like to send {{business_name}} a complimentary sample to test. No commitment - just want to get our product in front of quality operations like yours.
+
+Interested? Reply here or reach out directly at colton@sweetleafsoil.com.
+
+Colton
+Sweet Leaf Soil
+
+[{{tracking_id}}]

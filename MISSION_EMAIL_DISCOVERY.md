@@ -137,9 +137,76 @@ Key learnings:
 
 ---
 
+## Mission v4 Summary (2026-01-30) - Playwright + Contact Forms
+
+**New Emails found:** +24 (750 → 774)
+**Contact Forms tagged:** +68 (0 → 68)
+**Coverage:** 64.2% → 66.3%
+**Reachable (email OR form):** 72.1%
+
+### Objectives Achieved
+
+**Objective 1: Playwright Email Extraction**
+- Installed and configured Playwright with headless Chromium
+- Processed ~115/401 candidate sites (script still running)
+- Found **17 valid emails** via JS rendering
+- Many sites have template/sentry emails that were filtered as false positives
+
+**Objective 2: Contact Form Tagging**
+- Added `has_contact_form` and `contact_form_url` columns
+- Tagged **68 leads** with contact form URLs
+- Forms detected at /contact, /contact-us, and homepage paths
+
+### Playwright Emails Found
+| Business | Email |
+|----------|-------|
+| Sunrise Greenhouse | matt@southland.rentals |
+| McKay Nursery WL LLC | oregongc@mckaynursery.com |
+| Millhome Nursery & Greenhouses | mngplants@tcei.com |
+| Hsu Ginseng Farms, LLP | orders@hsucompost.com |
+| BENZIE CONSERVATION DISTRICT | info@benziecd.org |
+| CHERRY BARC INC | info@cherrybarcfarm.com |
+| DELTA CONSERVATION DISTRICT | deltacd@deltacd.org |
+| FARMER WHITE'S | info@farmerwhites.com |
+| GRAND HAVEN GARDEN HOUSE | gardenhouse120@gmail.com |
+| IOSCO CONSERVATION DISTRICT | ioscodistrictmanager@macd.org |
+| R & W NURSERY LLC | rwnursery@yahoo.com |
+| RUHLIG FARMS | ruhligfarmsllc@gmail.com |
+| CRAIN TREE FARM & NURSERY | digtrees@craintreefarm.com |
+| And more... | |
+
+### False Positives Filtered
+- `user@domain.com` - Common placeholder
+- `*@sentry-next.wixpress.com` - Wix analytics
+- `impallari@gmail.com` - Font designer (from Google Fonts)
+- `*@company.com` - Template emails
+
+### Scripts Created
+- `scripts/playwright_scraper_v4.py` - Initial scraper
+- `scripts/playwright_single_v4.py` - Optimized single-threaded version (still running)
+
+### Technical Notes
+- Playwright sync API doesn't work with Python threading (greenlet errors)
+- Single-threaded approach is slow but reliable (~3-4 sites/minute)
+- 8-second timeout per page with 500ms JS wait
+- domcontentloaded event used for faster loading
+
+---
+
+## Final Cumulative Results
+
+| Metric | Start (v1) | After v4 | Change |
+|--------|------------|----------|--------|
+| Emails | 318 | **774** | +456 |
+| Coverage | 27.2% | **66.3%** | +39.1pp |
+| Contact Forms | 0 | **68** | +68 |
+| Reachable | 27.2% | **72.1%** | +44.9pp |
+
+---
+
 ## Remaining Opportunity
 
-**418 leads** still have websites but no email. Analysis shows:
+**394 leads** still have websites but no email or contact form:
 - Most genuinely don't display emails on public pages
 - ~60% use contact forms instead of visible email
 - ~20% have emails only in images (not extractable)

@@ -11,9 +11,11 @@ load_dotenv()
 # Configure Gemini
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY not found in environment variables")
-
-genai.configure(api_key=GEMINI_API_KEY)
+    print("⚠️  GEMINI_API_KEY not found - Gemini enrichment will be disabled")
+    GEMINI_CONFIGURED = False
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
+    GEMINI_CONFIGURED = True
 
 # Use Gemini 2.5 Flash (January 2026) - Latest GA model
 # Lightning-fast, highly capable, optimized for structured extraction
@@ -34,6 +36,9 @@ def call_gemini(prompt, max_retries=5):
     Raises:
         Exception: If all retries fail or response is invalid
     """
+    if not GEMINI_CONFIGURED:
+        raise ValueError("Gemini is not configured. Please set GEMINI_API_KEY environment variable.")
+    
     model = genai.GenerativeModel(MODEL_NAME)
 
     for attempt in range(max_retries):

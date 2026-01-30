@@ -164,7 +164,7 @@ class Phase1Pipeline:
                 results_a = sync_manager.sync_batch(
                     leads=tier_a_data,
                     campaign_id=campaign_id,
-                    check_duplicates=True,
+                    check_duplicates=False,  # V2 API doesn't support GET /leads
                     rate_limit_delay=0.5,
                     progress_callback=self._progress_callback
                 )
@@ -184,7 +184,7 @@ class Phase1Pipeline:
                 results_b = sync_manager.sync_batch(
                     leads=tier_b_data,
                     campaign_id=campaign_id,
-                    check_duplicates=True,
+                    check_duplicates=False,  # V2 API doesn't support GET /leads
                     rate_limit_delay=0.5,
                     progress_callback=self._progress_callback
                 )

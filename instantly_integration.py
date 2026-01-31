@@ -252,15 +252,20 @@ class InstantlyAPIClient:
         first_name: str = '',
         last_name: str = '',
         company_name: str = '',
-        custom_variables: Dict = None
+        custom_variables: Dict = None,
+        skip_if_in_campaign: bool = True
     ) -> Tuple[bool, Dict, Optional[str]]:
-        """Add a lead to a campaign"""
+        """Add a lead to a campaign
+        
+        NOTE: The V2 API field is "campaign" (not "campaign_id")
+        """
         payload = {
-            "campaign_id": campaign_id,
+            "campaign": campaign_id,  # V2 API uses "campaign" not "campaign_id"
             "email": email,
             "first_name": first_name,
             "last_name": last_name,
-            "company_name": company_name
+            "company_name": company_name,
+            "skip_if_in_campaign": skip_if_in_campaign
         }
         
         if custom_variables:

@@ -156,7 +156,21 @@ def migrate_db():
         ('email_hunter_error', 'TEXT DEFAULT NULL'),  # Error message if failed
         ('contact_email', 'TEXT DEFAULT NULL'),  # Secondary contact (sales manager, etc.)
         ('generic_email', 'TEXT DEFAULT NULL'),  # Fallback: info@, contact@, sales@
-        ('contact_form_url', 'TEXT DEFAULT NULL')  # Last resort: web form URL
+        ('contact_form_url', 'TEXT DEFAULT NULL'),  # Last resort: web form URL
+        # Phase 11: OMRI Soil Mixer Integration columns
+        ('data_source', 'TEXT DEFAULT NULL'),  # omri/google_places/manual/import
+        ('omri_code', 'TEXT DEFAULT NULL'),  # OMRI manufacturer code (e.g., "fox", "tom")
+        ('omri_url', 'TEXT DEFAULT NULL'),  # Full OMRI profile URL
+        ('omri_listing_date', 'TEXT DEFAULT NULL'),  # When first listed on OMRI
+        ('omri_expiration', 'TEXT DEFAULT NULL'),  # OMRI certification expiration
+        ('omri_product_count', 'INTEGER DEFAULT NULL'),  # Number of OMRI-listed products
+        ('omri_categories', 'TEXT DEFAULT NULL'),  # JSON array: ["Potting Soil", "Transplant Media"]
+        ('soil_mixer_tier', 'TEXT DEFAULT NULL'),  # tier_1 (craft) / tier_2 (commodity)
+        ('soil_mixer_signals', 'TEXT DEFAULT NULL'),  # JSON: keywords, size indicators, etc.
+        ('uses_worm_castings', 'BOOLEAN DEFAULT NULL'),  # Already uses vermicompost
+        ('worm_castings_potential', 'TEXT DEFAULT NULL'),  # high/medium/low
+        ('estimated_volume', 'TEXT DEFAULT NULL'),  # Small/Medium/Large/Enterprise
+        ('primary_market', 'TEXT DEFAULT NULL')  # retail/wholesale/professional/cannabis
     ]
 
     migrations_applied = False

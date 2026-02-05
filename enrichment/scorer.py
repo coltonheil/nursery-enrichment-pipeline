@@ -24,11 +24,13 @@ ICP_PRIMARY_SIGNALS = {
     "uses_growing_media": True,
     "production_method": ["container", "greenhouse", "mixed"],
     "container_production": True,
+    # Soil mixers are PRIMARY - they MAKE soil products (highest volume buyers)
+    "business_type": ["soil_mixer"],
 }
 
 ICP_SECONDARY_SIGNALS = {
     # These indicate the business RESELLS growing media
-    "business_type": ["soil_mixer", "farm_supply"],
+    "business_type": ["farm_supply"],
 }
 
 DISQUALIFICATION_KEYWORDS = [
@@ -201,6 +203,29 @@ SCORING_RULES = {
         "description": "Closed both Saturday and Sunday"
     },
 
+    # === SOIL MIXER SIGNALS (Phase 11) ===
+
+    "soil_mixer_business": {
+        "points": 35,
+        "description": "Soil mixer/blender business (high volume buyer)"
+    },
+    "omri_certified": {
+        "points": 25,
+        "description": "OMRI-certified products (organic commitment)"
+    },
+    "soil_mixer_tier_1": {
+        "points": 15,
+        "description": "Tier 1 craft soil brand (premium segment)"
+    },
+    "uses_worm_castings": {
+        "points": 20,
+        "description": "Already uses worm castings/vermicompost"
+    },
+    "worm_keyword_in_name": {
+        "points": 25,
+        "description": "Worm/vermi in company name (strong affinity)"
+    },
+
     # === NEGATIVE SIGNALS (Disqualifiers) ===
 
     "landscaping_services": {
@@ -290,8 +315,12 @@ def check_icp_qualification(lead: dict) -> tuple:
     if get_value('container_production') == True:
         return True, "primary"
 
+    # Soil mixers are now PRIMARY (they MAKE soil - highest volume worm casting buyers)
+    if business_type == "soil_mixer":
+        return True, "primary"
+
     # Check SECONDARY ICP signals (resells growing media)
-    if business_type in ["soil_mixer", "farm_supply"]:
+    if business_type in ["farm_supply"]:
         return True, "secondary"
 
     # Check TERTIARY signals (field farms that might still buy)
@@ -451,7 +480,7 @@ def calculate_score(lead) -> dict:
         else:
             try:
                 return lead[key] if lead[key] is not None else default
-            except (KeyError, TypeError):
+            except (KeyError, TypeError, IndexError):
                 return default
 
     # Check if lead has sufficient data
@@ -527,6 +556,59 @@ def calculate_score(lead) -> dict:
             'description': SCORING_RULES['organic_focus']['description']
         })
         total_score += SCORING_RULES['organic_focus']['points']
+
+    # === SOIL MIXER SIGNALS (Phase 11) ===
+    
+    # Soil mixer business type (high volume worm castings buyer)
+    if business_type == "soil_mixer":
+        signals.append({
+            'signal': 'soil_mixer_business',
+            'points': SCORING_RULES['soil_mixer_business']['points'],
+            'value': True,
+            'description': SCORING_RULES['soil_mixer_business']['description']
+        })
+        total_score += SCORING_RULES['soil_mixer_business']['points']
+    
+    # OMRI certified (from data_source or explicit flag)
+    if get_value('data_source') == 'omri' or get_value('omri_code'):
+        signals.append({
+            'signal': 'omri_certified',
+            'points': SCORING_RULES['omri_certified']['points'],
+            'value': get_value('omri_code') or 'yes',
+            'description': SCORING_RULES['omri_certified']['description']
+        })
+        total_score += SCORING_RULES['omri_certified']['points']
+    
+    # Tier 1 craft soil brand
+    if get_value('soil_mixer_tier') == 'tier_1':
+        signals.append({
+            'signal': 'soil_mixer_tier_1',
+            'points': SCORING_RULES['soil_mixer_tier_1']['points'],
+            'value': True,
+            'description': SCORING_RULES['soil_mixer_tier_1']['description']
+        })
+        total_score += SCORING_RULES['soil_mixer_tier_1']['points']
+    
+    # Already uses worm castings
+    if get_value('uses_worm_castings') == True:
+        signals.append({
+            'signal': 'uses_worm_castings',
+            'points': SCORING_RULES['uses_worm_castings']['points'],
+            'value': True,
+            'description': SCORING_RULES['uses_worm_castings']['description']
+        })
+        total_score += SCORING_RULES['uses_worm_castings']['points']
+    
+    # Worm/vermi in company name (strong affinity)
+    name_lower = business_name.lower()
+    if "worm" in name_lower or "vermi" in name_lower or "annelid" in name_lower:
+        signals.append({
+            'signal': 'worm_keyword_in_name',
+            'points': SCORING_RULES['worm_keyword_in_name']['points'],
+            'value': True,
+            'description': SCORING_RULES['worm_keyword_in_name']['description']
+        })
+        total_score += SCORING_RULES['worm_keyword_in_name']['points']
 
     # Greenhouse/container production
     production_method = get_value('production_method') or ""

@@ -2,7 +2,48 @@
 
 *Critical invariants and deployment facts for the nursery lead enrichment and outreach pipeline.*
 
-**Last Updated:** 2026-01-29 20:10
+**Last Updated:** 2026-02-05 06:45
+
+---
+
+## Soil Mixer Integration (Phase 11)
+
+**Added:** 2026-02-05
+
+**Purpose:** Import OMRI-certified organic soil blenders as high-value leads for worm castings sales.
+
+**Data Source:** OMRI US Product List (https://www.omri.org/us-list)
+- Search: "potting soil" → 7,206 products
+- Scraped 4 pages, extracted 62 unique companies
+- Classified: 38 Tier 1 (craft), 12 Tier 2 (commodity), 12 unknown
+
+**Key Files:**
+- `data/omri_soil_companies.json` — Scraped company data with tier classification
+- `scripts/import_omri_soil_companies.py` — Import script
+- `scripts/omri_scraper.py` — Browser scraping utilities
+
+**Database Columns Added:**
+- `data_source` — omri/google_places/manual
+- `omri_code`, `omri_url` — OMRI identifier and profile URL
+- `soil_mixer_tier` — tier_1 (craft) / tier_2 (commodity)
+- `soil_mixer_signals` — JSON with keywords, indicators
+- `uses_worm_castings`, `worm_castings_potential` — Affinity indicators
+
+**ICP Changes:**
+- `soil_mixer` moved to PRIMARY ICP (was SECONDARY)
+- Rationale: Soil mixers MAKE soil products, highest volume buyers
+
+**Scoring Signals Added:**
+- `soil_mixer_business`: +35 points
+- `omri_certified`: +25 points  
+- `soil_mixer_tier_1`: +15 points
+- `uses_worm_castings`: +20 points
+- `worm_keyword_in_name`: +25 points
+
+**Current Stats:**
+- 38 Tier 1 craft soil companies imported
+- All scored as Tier A (100+ points)
+- Top targets: FoxFarm, Coast of Maine, Dr. Earth, Brut Worm Farms
 
 ---
 

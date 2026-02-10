@@ -1,0 +1,85 @@
+{
+  "id": "def50d4a-54cb-4a8a-b603-88993d64d9c1",
+  "name": "Soil Mixers - Sample Outreach (Feb 2026)",
+  "status": 0,
+  "campaign_schedule": {
+    "schedules": [
+      {
+        "name": "Weekday Business Hours",
+        "timing": {
+          "from": "09:00",
+          "to": "17:00"
+        },
+        "days": {
+          "0": false,
+          "1": true,
+          "2": true,
+          "3": true,
+          "4": true,
+          "5": true,
+          "6": false
+        },
+        "timezone": "America/Chicago"
+      }
+    ]
+  },
+  "timestamp_created": "2026-02-09T12:41:40.385Z",
+  "timestamp_updated": "2026-02-09T14:28:00.533Z",
+  "sequences": [
+    {
+      "steps": [
+        {
+          "type": "email",
+          "delay": 4,
+          "variants": [
+            {
+              "subject": "Worm castings ingredient for {{company_name}}?",
+              "body": "<div>Hi there,</div><div>I came across {{company_name}} and your soil product line \u2014 looks like you're doing great work in the organic space.</div><div>I run Sweet Leaf Soil in Wisconsin. We produce bulk, finely-screened worm castings that soil blenders are using as a premium ingredient in their mixes. OMRI-listed, consistent quality, available in supersacks or bulk loads.</div><div>A few things that matter for blenders:</div><div>- Consistent particle size (finely screened)<br />- Low moisture content for accurate blending ratios<br />- Reliable supply \u2014 we produce year-round</div><div>Would it make sense to send you a sample to evaluate as an ingredient? No commitment \u2014 just want you to see the quality firsthand.</div><div>Colton Heil<br />Sweet Leaf Soil</div>"
+            }
+          ],
+          "delay_unit": "days",
+          "pre_delay_unit": "days"
+        },
+        {
+          "type": "email",
+          "delay": 5,
+          "variants": [
+            {
+              "subject": "",
+              "body": "<div>Hi there,</div><div><br /></div><div>Following up \u2014 I know ingredient sourcing decisions don't happen overnight, but wanted to make sure this landed.</div><div><br /></div><div>We're currently supplying castings to blenders in the Midwest and can scale to meet production schedules.\u00a0</div><div><br /></div><div>Happy to send specs (nutrient analysis, moisture content) along with a sample.</div><div><br /></div><div>Worth a quick look?</div><div><br /></div><div>Colton</div><div>sweetleafsoil.com</div>"
+            }
+          ],
+          "delay_unit": "days",
+          "pre_delay_unit": "days"
+        },
+        {
+          "type": "email",
+          "delay": 1,
+          "variants": [
+            {
+              "subject": "",
+              "body": "<div>Hi there,</div><div><br /></div><div>Last email from me on this \u2014 just one thing I wanted to share.</div><div><br /></div><div>Blenders adding worm castings at 5-10% of their organic mixes are using it as a premium differentiator on the shelf.\u00a0</div><div><br /></div><div>It's a margin play \u2014 castings let you charge more per bag while improving the actual product performance.</div><div><br /></div><div>If ingredient sourcing is ever on your radar, I'd love to send a sample and spec sheet. Open offer.</div><div><br /></div><div>Best,</div><div>Colton</div><div>sweetleafsoil.com</div>"
+            }
+          ],
+          "delay_unit": "days",
+          "pre_delay_unit": "days"
+        }
+      ]
+    }
+  ],
+  "first_email_text_only": true,
+  "stop_on_reply": true,
+  "stop_on_auto_reply": true,
+  "prioritize_new_leads": true,
+  "core_variables": {
+    "phone": true,
+    "website": true,
+    "lastName": true,
+    "firstName": true,
+    "companyName": true,
+    "personalization": true
+  },
+  "custom_variables": {},
+  "insert_unsubscribe_header": true,
+  "organization": "30d4c1f2-6402-42ac-8c17-78b485d17b7f"
+}

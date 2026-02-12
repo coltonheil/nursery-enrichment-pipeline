@@ -1,7 +1,7 @@
 # OUTREACH TEMPLATES - Bulk Worm Castings Sales (B2B)
 
 **Last Updated:** 2026-01-29  
-**Product:** Bulk worm castings (supersacks: 1 CY / 2,250 lbs, up to truckload)  
+**Product:** Bulk worm castings (supersacks: 2 CY / 2,250 lbs, up to truckload)  
 **Target Market:** Wisconsin wholesale nurseries, greenhouse growers, container production operations (B2B only)
 
 ---
@@ -87,7 +87,7 @@ Hi [First Name],
 
 I saw [Company] is a [large/wholesale] operation in [City].
 
-We supply bulk worm castings to Wisconsin wholesale nurseries - supersacks (1 CY / 2,250 lbs) up to full truckloads.
+We supply bulk worm castings to Wisconsin wholesale nurseries - supersacks (2 CY / 2,250 lbs) up to full truckloads.
 
 Most wholesale operations use them for:
 - Potting mix amendments (cost-effective at volume)

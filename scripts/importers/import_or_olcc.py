@@ -21,6 +21,8 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+from openpyxl import load_workbook
+from io import BytesIO
 
 # Ensure project root is in path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -37,6 +39,10 @@ CULTIVATOR_TYPES = {
 }
 
 # OLCC Tableau data URL - try multiple approaches
+OFFICIAL_XLSX_URL = (
+    'https://www.oregon.gov/olcc/marijuana/Documents/Cannabis-Business-Licenses-All.xlsx'
+)
+
 TABLEAU_CSV_URL = (
     'https://data.olcc.state.or.us/t/OLCCPublic/views/'
     'CannabisBusinessLicensesEndorsements/CannabisLicensesEndorsements.csv'
@@ -53,6 +59,62 @@ HEADERS = {
     ),
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 }
+
+
+def fetch_olcc_via_official_xlsx(xlsx_url: str = OFFICIAL_XLSX_URL):
+    """Fetch OLCC public statewide business license workbook and filter cultivators."""
+    print('[OR OLCC] Trying official Oregon.gov XLSX export...')
+    try:
+        r = requests.get(xlsx_url, timeout=90, headers=HEADERS)
+        r.raise_for_status()
+        wb = load_workbook(filename=BytesIO(r.content), read_only=True, data_only=True)
+        ws = wb[wb.sheetnames[0]]
+
+        rows = ws.iter_rows(min_row=1, values_only=True)
+        header = next(rows, None)
+        if not header:
+            return []
+
+        idx = {str(col).strip().lower(): i for i, col in enumerate(header) if col is not None}
+
+        def g(row, *names):
+            for n in names:
+                i = idx.get(n)
+                if i is not None and i < len(row) and row[i] is not None:
+                    return str(row[i]).strip()
+            return ''
+
+        records = []
+        for row in rows:
+            license_type = g(row, 'license type', 'license_type').lower()
+            if not any(t in license_type for t in CULTIVATOR_TYPES):
+                continue
+
+            physical = g(row, 'physicaladdress', 'physical address', 'address')
+            city = ''
+            zip_code = ''
+            m = re.search(r'\b([A-Za-z .\'-]+)\s+OR\s+(\d{5}(?:-\d{4})?)', physical)
+            if m:
+                city = m.group(1).strip()
+                zip_code = m.group(2).strip()
+
+            records.append({
+                'business_name': g(row, 'business name', 'trade name') or g(row, 'business licenses'),
+                'license_number': g(row, 'license number'),
+                'license_type': license_type,
+                'license_status': 'active',
+                'city': city,
+                'zip': zip_code,
+                'county': g(row, 'county'),
+                'address': physical,
+                'raw_data': json.dumps({str(header[i]): ('' if i >= len(row) or row[i] is None else str(row[i])) for i in range(len(header))}),
+            })
+
+        print(f'[OR OLCC] Official XLSX fetched {len(records)} cultivator records')
+        return records
+    except Exception as e:
+        print(f'[OR OLCC] Official XLSX error: {e}')
+        return []
 
 
 def fetch_olcc_via_tableau():
@@ -256,14 +318,19 @@ def fetch_olcc_via_html_scrape():
         return []
 
 
-def fetch_records():
+def fetch_records(official_xlsx_url: str = ''):
     """
     Main fetch function. Tries multiple sources in order:
-    1. Tableau CSV export
-    2. CAMP eLicensing API
-    3. Scrape (last resort)
+    1. Official Oregon.gov XLSX export
+    2. Tableau CSV export
+    3. CAMP eLicensing API
     """
-    # Try Tableau first
+    records = fetch_olcc_via_official_xlsx(official_xlsx_url or OFFICIAL_XLSX_URL)
+    if records:
+        print(f'[OR OLCC] Got {len(records)} records from official XLSX')
+        return records
+
+    # Try Tableau next
     records = fetch_olcc_via_tableau()
     if records:
         print(f'[OR OLCC] Got {len(records)} records from Tableau')
@@ -368,14 +435,14 @@ def _write_summary(summary_path: str, payload: dict):
     out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 
 
-def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True):
+def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True, official_xlsx_url=''):
     """Main import entry point."""
     print(f'[OR OLCC] Starting import (dry_run={dry_run})')
 
     # Ensure DB schema is up to date
     migrate_db()
 
-    records = fetch_records()
+    records = fetch_records(official_xlsx_url=official_xlsx_url)
     fetched_count = len(records)
 
     if not records:
@@ -428,10 +495,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import Oregon OLCC cannabis cultivator licenses')
     parser.add_argument('--dry-run', action='store_true', help='Print stats without writing to DB')
     parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--official-xlsx-url', default=os.environ.get('OR_OLCC_XLSX_URL', OFFICIAL_XLSX_URL), help='Official Oregon.gov XLSX source URL')
     parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when fetch returns zero records')
     args = parser.parse_args()
     raise SystemExit(import_records(
         dry_run=args.dry_run,
         summary_json=args.summary_json,
         fail_on_empty_fetch=not args.allow_empty_fetch,
+        official_xlsx_url=args.official_xlsx_url,
     ))

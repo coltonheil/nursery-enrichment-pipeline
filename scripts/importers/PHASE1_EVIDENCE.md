@@ -102,11 +102,32 @@ Scope: MI / OR / IL / USDA / MT importer hardening + verification only.
 - `usda_hemp`: expected `blocked_no_source` without CSV source → actual `blocked_no_source`
 - `mt_revenue`: expected `blocked_no_source` without source / `ok` with fallback file → actual matched
 
+## Checkpoint D — OR official-source unlock (2026-02-18)
+
+### Tavily-first discovery
+- Query: `Oregon OLCC cannabis licensee csv export public`
+- Official-source hit used: `https://www.oregon.gov/olcc/marijuana/Documents/Cannabis-Business-Licenses-All.xlsx`
+
+### Importer change
+- `import_or_olcc.py`
+  - Added official XLSX source path (default + env/CLI override):
+    - env: `OR_OLCC_XLSX_URL`
+    - CLI: `--official-xlsx-url`
+  - Added XLSX parser (`openpyxl`) and cultivator filtering via `License Type`.
+
+### Runs
+- Dry: `python3 scripts/importers/import_or_olcc.py --dry-run --summary-json outputs/phase1_evidence/or_official_dry.json`
+  - result: `fetched=1380`, `new=1380`, `existing=0`, `status=ok`
+- Live: `python3 scripts/importers/import_or_olcc.py --summary-json outputs/phase1_evidence/or_official_live.json`
+  - result: `new=1380`, `existing=0`, `status=ok`
+- Rerun dry: `python3 scripts/importers/import_or_olcc.py --dry-run --summary-json outputs/phase1_evidence/or_official_rerun_dry.json`
+  - result: `new=0`, `existing=1380`, idempotency confirmed
+
 ## Data quality checks
 (Null `business_name`, null `state`, and `promoted_at` null by source)
 
 - `mi_cra`: total=0, null_business_name=0, null_state=0, promoted_at_null=0
-- `or_olcc`: total=0, null_business_name=0, null_state=0, promoted_at_null=0
+- `or_olcc`: total=1380, null_business_name=0, null_state=0, promoted_at_null=1380
 - `il_idfpr`: total=224, null_business_name=0, null_state=0, promoted_at_null=224
 - `usda_hemp`: total=0, null_business_name=0, null_state=0, promoted_at_null=0
-- `mt_revenue`: total=5, null_business_name=0, null_state=0, promoted_at_null=5
+- `mt_revenue`: total=287, null_business_name=0, null_state=0, promoted_at_null=287

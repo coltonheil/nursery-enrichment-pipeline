@@ -30,6 +30,18 @@ from database.models import get_db_connection, migrate_db
 REGISTRY_SOURCE = 'mt_revenue'
 SEGMENT = 'cannabis_grower'
 
+NOISE_PATTERNS = [
+    r'\binformational purposes\b',
+    r'\bpage\s+\d+\s+of\s+\d+\b',
+    r'\brevenue\.mt\.gov\b',
+    r'\bmontana relay\b',
+    r'\bgovernor\b',
+    r'\bdirector\b',
+    r'\bcannabis control division\b',
+    r'\blicensed cultivator locations\b',
+    r'\blicensee[’\'`s]*\s+name\s+city\s+location\s+name\s+phone\b',
+]
+
 
 def _load_pdf_path(pdf_source: str):
     if not pdf_source:
@@ -101,6 +113,25 @@ def parse_manual_input(input_file: str):
     return records, diagnostics
 
 
+def is_noise_text(text: str) -> bool:
+    lower = (text or '').strip().lower()
+    if not lower:
+        return True
+    return any(re.search(p, lower) for p in NOISE_PATTERNS)
+
+
+def validate_record(rec: dict):
+    name = (rec.get('business_name') or '').strip()
+    state = (rec.get('state') or '').strip().upper()
+    if not name:
+        return False, 'reject_missing_name_validator'
+    if state != 'MT':
+        return False, 'reject_non_mt_state_validator'
+    if is_noise_text(name):
+        return False, 'reject_noise_name_validator'
+    return True, 'accepted_validator'
+
+
 def parse_pdf(pdf_path: str):
     records = []
     diagnostics = {
@@ -135,11 +166,7 @@ def parse_pdf(pdf_path: str):
                 diagnostics['lines_total'] += 1
 
                 # Skip header/footer/noise lines
-                lower = line.lower()
-                if any(k in lower for k in [
-                    'governor', 'director', 'cannabis control division', 'licensed cultivator locations',
-                    'licensee’s name city location name phone', 'page of', 'revenue.mt.gov', 'montana relay'
-                ]):
+                if is_noise_text(line):
                     continue
 
                 has_phone = any(w['x0'] >= PHONE_MIN_X for w in row_words)
@@ -192,8 +219,14 @@ def insert_records(records, dry_run=False):
     conn = get_db_connection()
     cur = conn.cursor()
     new_count = existing_count = error_count = 0
+    rejected_count = 0
 
     for rec in records:
+        ok, _reason = validate_record(rec)
+        if not ok:
+            rejected_count += 1
+            continue
+
         name = rec['business_name']
         city = rec.get('city', '')
         lic = rec.get('license_number')
@@ -233,7 +266,7 @@ def insert_records(records, dry_run=False):
     if not dry_run:
         conn.commit()
     conn.close()
-    return {'new': new_count, 'existing': existing_count, 'errors': error_count}
+    return {'new': new_count, 'existing': existing_count, 'errors': error_count, 'rejected': rejected_count}
 
 
 def _write_summary(summary_path: str, payload: dict):
@@ -288,12 +321,23 @@ def main(dry_run=False, pdf_source='', input_file='', summary_json='', fail_on_e
     if diagnostics:
         print(f'[MT REVENUE] Parse diagnostics: {json.dumps(diagnostics, sort_keys=True)}')
 
-    if fetched_count == 0:
-        print('[MT REVENUE] ⚠️  Zero records parsed from provided source.')
+    validator_diagnostics = {}
+    validated_records = []
+    for rec in records:
+        ok, reason = validate_record(rec)
+        validator_diagnostics[reason] = validator_diagnostics.get(reason, 0) + 1
+        if ok:
+            validated_records.append(rec)
+
+    if validator_diagnostics:
+        print(f'[MT REVENUE] Validator diagnostics: {json.dumps(validator_diagnostics, sort_keys=True)}')
+
+    if len(validated_records) == 0:
+        print('[MT REVENUE] ⚠️  Zero records remaining after validation.')
         summary = {
             'importer': 'mt_revenue',
             'dry_run': dry_run,
-            'fetched': 0,
+            'fetched': fetched_count,
             'new': 0,
             'existing': 0,
             'errors': 1,
@@ -302,14 +346,16 @@ def main(dry_run=False, pdf_source='', input_file='', summary_json='', fail_on_e
             'pdf_source': pdf_source,
             'input_file': input_file,
             'diagnostics': diagnostics,
+            'validator_diagnostics': validator_diagnostics,
         }
         _write_summary(summary_json, summary)
         return 2 if fail_on_empty_fetch else 0
 
-    stats = insert_records(records, dry_run=dry_run)
+    stats = insert_records(validated_records, dry_run=dry_run)
     print(f'\n[MT REVENUE] Import complete (dry_run={dry_run}):')
     print(f'  ✅ New records:     {stats["new"]}')
     print(f'  ⏭️  Already existed: {stats["existing"]}')
+    print(f'  🚫 Rejected:        {stats["rejected"]}')
     print(f'  ❌ Errors:          {stats["errors"]}')
 
     summary = {
@@ -318,12 +364,14 @@ def main(dry_run=False, pdf_source='', input_file='', summary_json='', fail_on_e
         'fetched': fetched_count,
         'new': stats['new'],
         'existing': stats['existing'],
+        'rejected': stats['rejected'],
         'errors': stats['errors'],
         'blocked': False,
         'status': 'ok',
         'pdf_source': pdf_source,
         'input_file': input_file,
         'diagnostics': diagnostics,
+        'validator_diagnostics': validator_diagnostics,
     }
     _write_summary(summary_json, summary)
     return 0

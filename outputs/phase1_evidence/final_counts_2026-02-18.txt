@@ -1,0 +1,5 @@
+il_idfpr|cannabis_grower|224
+mi_cra|cannabis_grower|1692
+mt_revenue|cannabis_grower|286
+or_olcc|cannabis_grower|1380
+usda_hemp|hemp_producer|811

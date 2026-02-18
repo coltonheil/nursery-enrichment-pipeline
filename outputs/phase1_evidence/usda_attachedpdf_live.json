@@ -1,0 +1,22 @@
+{
+  "importer": "usda_hemp",
+  "dry_run": false,
+  "fetched": 811,
+  "new": 0,
+  "existing": 811,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "csv_url": "",
+  "input_file": "outputs/phase1_evidence/usda_foia_export_midwest.csv",
+  "source_url": "file:///Users/coltonheil/.openclaw/media/inbound/7f396665-5c6c-4a64-b2c9-6e72b02b909e.pdf",
+  "fetch_timestamp": "2026-02-18T12:44:14+00:00",
+  "artifact_sha256": "fe99b6b3d518ff0fde2a676ef327e825d7ada5f88f8fa817582d3ec537ea0bef",
+  "import_batch_id": "usda_hemp:20260218T124414Z",
+  "schema_warnings": [
+    "Missing optional columns: ['registration_number', 'license_status', 'county', 'postal_code']"
+  ],
+  "diagnostics": {
+    "accepted": 811
+  }
+}

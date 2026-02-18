@@ -1,0 +1,1 @@
+mi_cra|total_rows=1692|distinct_license_numbers=1690|blank_license_numbers=2

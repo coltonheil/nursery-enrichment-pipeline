@@ -1,0 +1,1 @@
+usda_hemp|total=811|missing_source_url=0|missing_fetch_timestamp=0|missing_artifact_sha256=0|missing_import_batch_id=0|distinct_artifact_sha256=1|distinct_import_batch_id=1

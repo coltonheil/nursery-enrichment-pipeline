@@ -1,0 +1,8 @@
+class a marihuana grower - license|10
+class b marihuana grower - license|10
+class c marihuana grower - license|10
+excess marihuana grower - license|10
+excess_marihuana_grower_adult_use|175
+grower_class_a_adult_use|20
+grower_class_b_adult_use|176
+grower_class_c_adult_use|1281

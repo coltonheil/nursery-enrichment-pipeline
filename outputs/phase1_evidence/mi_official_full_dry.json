@@ -1,0 +1,12 @@
+{
+  "importer": "mi_cra",
+  "dry_run": true,
+  "fetched": 427,
+  "new": 387,
+  "existing": 40,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "input_file": "",
+  "diagnostics": {}
+}

@@ -85,23 +85,6 @@ Scope: MI / OR / IL / USDA / MT importer hardening + verification only.
   2. Run importer using official source (not seed fallback).
   3. Verify non-seed inserts and idempotent rerun.
 
-## Evidence table: registry_source, segment, count
-(From `data/leads.db` post-run query)
-
-- `il_idfpr`, `cannabis_grower`, `224`
-- `mi_cra`, `cannabis_grower`, `40`
-- `mt_revenue`, `cannabis_grower`, `286`
-- `or_olcc`, `cannabis_grower`, `1380`
-- `usda_hemp`, `hemp_producer`, `811`
-
-## Evidence table: expected vs actual status
-
-- `mi_cra`: expected `ok` (live fetch) → actual `failed_empty_fetch`
-- `or_olcc`: expected `ok` (live fetch) → actual `failed_empty_fetch`
-- `il_idfpr`: expected `ok` → actual `ok`
-- `usda_hemp`: expected `blocked_no_source` without CSV source → actual `blocked_no_source`
-- `mt_revenue`: expected `blocked_no_source` without source / `ok` with fallback file → actual matched
-
 ## Checkpoint D — OR official-source unlock (2026-02-18)
 
 ### Tavily-first discovery
@@ -197,15 +180,66 @@ Scope: MI / OR / IL / USDA / MT importer hardening + verification only.
 - Live: `outputs/phase1_evidence/usda_fallback_live.json` → `new=811`, `existing=0`
 - Rerun dry: `outputs/phase1_evidence/usda_fallback_rerun_dry.json` → `new=0`, `existing=811` (idempotent)
 
-## Current blockers snapshot (post-H)
-- `mi_cra` automated Accela POST path still intermittently fragile, but fallback ingestion is now unblocked and evidenced.
-- `usda_hemp` no longer blocked when using approved exported artifact fallback.
+## Checkpoint I — MI official full extract path + completeness reconciliation (2026-02-18)
+
+### Live official run (no fallback file)
+- Live: `outputs/phase1_evidence/mi_official_full_live.json`
+  - `fetched=2031`, `new=1652`, `existing=379`, `status=ok`
+- Rerun dry: `outputs/phase1_evidence/mi_official_full_rerun_dry.json`
+  - `fetched=2031`, `new=0`, `existing=2031` (idempotent)
+
+### Reconciliation artifacts
+- `outputs/phase1_evidence/mi_completeness_reconciliation_2026-02-18.txt`
+- `outputs/phase1_evidence/mi_license_type_counts_2026-02-18.txt`
+
+Notes:
+- MI full official extraction now runs directly from CRA Accela path (not fallback-only).
+- Fetched rows include overlapping license categories (notably excess grower overlap); canonical DB count is deduplicated at write-time by `(license_number, registry_source)` and fallback duplicate guards.
+
+## Checkpoint J — USDA provenance hardening verification (2026-02-18)
+
+### Provenance fields enforced in DB writes
+- `source_url`
+- `fetch_timestamp`
+- `artifact_sha256`
+- `import_batch_id`
+
+### Attached PDF provenance run evidence
+- Dry: `outputs/phase1_evidence/usda_attachedpdf_dry.json`
+- Live: `outputs/phase1_evidence/usda_attachedpdf_live.json`
+- Rerun dry: `outputs/phase1_evidence/usda_attachedpdf_rerun_dry.json`
+- Audit query output: `outputs/phase1_evidence/usda_provenance_audit_2026-02-18.txt`
+  - `missing_source_url=0`
+  - `missing_fetch_timestamp=0`
+  - `missing_artifact_sha256=0`
+  - `missing_import_batch_id=0`
+
+## Canonical final source counts (current DB state)
+(From `outputs/phase1_evidence/final_counts_2026-02-18.txt`)
+
+- `il_idfpr`, `cannabis_grower`, `224`
+- `mi_cra`, `cannabis_grower`, `1692`
+- `mt_revenue`, `cannabis_grower`, `286`
+- `or_olcc`, `cannabis_grower`, `1380`
+- `usda_hemp`, `hemp_producer`, `811`
+
+## Evidence table: expected vs actual status (current)
+
+- `mi_cra`: expected `ok` (official full extract path) → actual `ok`
+- `or_olcc`: expected `ok` (official XLSX) → actual `ok`
+- `il_idfpr`: expected `ok` → actual `ok`
+- `usda_hemp`: expected `ok` (approved exported artifact + provenance fields) → actual `ok`
+- `mt_revenue`: expected `ok` (official PDF + cleanup guard) → actual `ok`
+
+## Current blockers snapshot (post-J)
+- No strict Phase 1 importer blocker remains for MI/OR/IL/USDA/MT in this environment.
+- Residual risk (non-blocking): MI Accela HTML/ASP.NET flow is vendor-controlled and could drift; fallback path remains available if portal structure changes.
 
 ## Data quality checks
 (Null `business_name`, null `state`, and `promoted_at` null by source)
 
-- `mi_cra`: total=0, null_business_name=0, null_state=0, promoted_at_null=0
-- `or_olcc`: total=1380, null_business_name=0, null_state=0, promoted_at_null=1380
 - `il_idfpr`: total=224, null_business_name=0, null_state=0, promoted_at_null=224
-- `usda_hemp`: total=0, null_business_name=0, null_state=0, promoted_at_null=0
-- `mt_revenue`: total=287, null_business_name=0, null_state=0, promoted_at_null=287
+- `mi_cra`: total=1692, null_business_name=0, null_state=0, promoted_at_null=1692
+- `mt_revenue`: total=286, null_business_name=0, null_state=0, promoted_at_null=286
+- `or_olcc`: total=1380, null_business_name=0, null_state=0, promoted_at_null=1380
+- `usda_hemp`: total=811, null_business_name=0, null_state=0, promoted_at_null=811

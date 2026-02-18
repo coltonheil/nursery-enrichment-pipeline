@@ -105,9 +105,10 @@ def call_gemini(prompt, max_retries=5):
 
     raise Exception(f"Gemini API failed after {max_retries} attempts")
 
-def enrich_lead_with_gemini(website_text, business_name, city, state):
+def build_nursery_prompt(website_text, business_name, city, state):
     """
-    Enrich a lead using Gemini to analyze website content.
+    Build the nursery/grower enrichment prompt.
+    This is the original nursery-focused prompt — do NOT modify.
 
     Args:
         website_text: Extracted text from website
@@ -116,18 +117,9 @@ def enrich_lead_with_gemini(website_text, business_name, city, state):
         state: State location
 
     Returns:
-        dict: Enriched data extracted from website
-
-    Raises:
-        Exception: If API call fails or data is invalid
+        str: Prompt string to send to Gemini
     """
-
-    # Validate input
-    if not website_text or len(website_text) < 100:
-        raise ValueError("Insufficient website text for analysis")
-
-    # Build the enrichment prompt with ICP-specific signals
-    prompt = f"""You are analyzing a nursery/grower business website to determine if they are a potential buyer of bulk worm castings (vermicompost) for agricultural or horticultural use.
+    return f"""You are analyzing a nursery/grower business website to determine if they are a potential buyer of bulk worm castings (vermicompost) for agricultural or horticultural use.
 
 Business Name: {business_name}
 Location: {city}, {state}
@@ -343,38 +335,522 @@ Output:
 
 Now analyze the business above and return the JSON:"""
 
+
+# =============================================================================
+# Phase 3: Segment-Aware Prompt Builders
+# Cannabis and hemp websites use different language than nursery sites.
+# These prompt builders extract the same ICP signals in segment-appropriate language.
+# The existing build_nursery_prompt() above is UNCHANGED.
+# =============================================================================
+
+def build_cannabis_prompt(website_text, business_name='', city='', state=''):
+    """
+    Build a cannabis cultivator enrichment prompt.
+
+    Extracts ICP signals specific to cannabis cultivation operations.
+    Key difference from nursery prompt: cannabis uses 'canopy sqft', 'grow room',
+    'cultivation', 'flower', 'clone', 'veg', 'harvest' — not 'potting mix' or 'greenhouse'.
+
+    Field mapping to existing DB columns:
+      cultivation_type  → production_method
+      indoor_sqft       → greenhouse_sqft  (reused — indoor sq ft is analogous)
+      canopy_sqft       → greenhouse_sqft  (same)
+      uses_amendments   → uses_growing_media
+      dispensary_only   → negative_indicators.dispensary_only
+      organic_certified → is_organic_certified
+
+    Args:
+        website_text: Extracted text from cannabis business website
+        business_name: Name of the business (optional)
+        city: City location (optional)
+        state: State location (optional)
+
+    Returns:
+        str: Prompt string to send to Gemini
+    """
+    business_context = ''
+    if business_name:
+        business_context += f'\nBusiness Name: {business_name}'
+    if city and state:
+        business_context += f'\nLocation: {city}, {state}'
+
+    return f"""You are analyzing a cannabis business website to determine if they are a potential buyer of bulk worm castings (vermicompost) for use as a soil amendment in cannabis cultivation.
+
+Sweet Leaf Soil sells premium worm castings that cannabis cultivators use to:
+- Improve soil structure in grow media
+- Add microbial life to coco coir and soil blends
+- Feed plants organically throughout the grow cycle
+- Reduce synthetic nutrient inputs{business_context}
+
+Website Content:
+{website_text[:15000]}
+
+EXTRACTION FOCUS — Cannabis Cultivator ICP Signals:
+
+1. CULTIVATION TYPE (Critical — determines if they need amendments)
+   - Indoor: climate-controlled grow rooms, LED/HPS lights, environmental controls → HIGH value
+   - Greenhouse: hoop houses, light dep greenhouses, sun+supplemental light → HIGH value
+   - Outdoor: sun-grown, full-sun fields → MEDIUM value (seasonal amendments)
+   - Mixed: combination of indoor + outdoor + greenhouse → HIGH value
+   - If they ONLY dispense (no grow mentioned) → DISQUALIFY
+
+2. FACILITY SIZE (Volume potential)
+   - indoor_sqft: total square footage of indoor grow space ("50,000 sq ft facility", "10,000 sqft canopy")
+   - canopy_sqft: licensed canopy square footage (Michigan uses "canopy" specifically)
+   - plant_count: licensed plant count if mentioned ("1,500 plants", "Class C = 1,500 plant limit")
+   - Multiple locations = higher volume
+
+3. GROWING MEDIA & AMENDMENT SIGNALS (Direct buying signal)
+   - Do they mention soil, coco coir, peat, growing media, substrates?
+   - Do they mention organic inputs, compost, amendments, top dressing?
+   - "We amend our soil with..." = HIGH priority
+   - "Organic growing practices" = HIGH priority
+   - Any explicit mention of worm castings / vermicompost = VERY HIGH priority
+
+4. ORGANIC / CLEAN CERTIFICATION (Premium buyer signal)
+   - Clean Green Certified (cannabis-specific organic cert)
+   - Sun+Earth Certified
+   - "Craft cannabis", "sun-grown", "living soil" language
+   - "No pesticides", "organic practices" = positive signal
+
+5. BUSINESS TYPE (Critical qualifier)
+   - cannabis_cultivator: licensed to grow (Class A/B/C in MI, Tier 1/2/3 in OR, Craft Grower in IL)
+   - dispensary: sells cannabis but has NO grow license or facility — DISQUALIFY
+   - processor: extracts/processes cannabis, may or may not grow
+   - mixed: cultivates AND dispenses AND/OR processes — qualify if they cultivate
+
+6. DISQUALIFICATION SIGNALS
+   - Dispensary only (no cultivation): they buy wholesale, don't grow → DO NOT SELL GROWING MEDIA
+   - Processing only (extraction, no plants): no soil needed
+   - Cannabis tech company / software / delivery service
+
+Extract and return ONLY a valid JSON object (no markdown, no explanation):
+
+{{
+  "business_type": "cannabis_cultivator / dispensary / processor / mixed / unknown",
+  "cultivation_type": "indoor / outdoor / greenhouse / mixed / unknown (primary cultivation method)",
+  "indoor_sqft": "Integer square footage of indoor grow space, or null if not mentioned",
+  "canopy_sqft": "Integer licensed canopy square footage if mentioned (common in Michigan), or null",
+  "plant_count": "Integer licensed plant count if mentioned, or null",
+  "license_type": "Class A/B/C cultivator, Tier 1/2/3, Craft Grower, etc. if mentioned, or null",
+  "uses_amendments": true/false (Do they mention soil amendments, compost, organic inputs, growing media?),
+  "uses_worm_castings": true/false (Explicit mention of worm castings, vermicompost, earthworm castings?),
+  "organic_certified": true/false (Clean Green, Sun+Earth, or stated organic practices?),
+  "dispensary_only": true/false (DISQUALIFY: they sell cannabis but have NO grow operation),
+  "multiple_locations": true/false (Do they operate from multiple locations?),
+  "crops_grown": ["cannabis"],
+  "scale_indicators": ["Array of specific size/scale quotes from the website, e.g. '50,000 sqft indoor facility', '1,500 plant license'"],
+  "disqualification_signals": ["Array of red flags, e.g. 'dispensary only', 'no grow license', 'delivery service only'"],
+  "contact_name": "Full name of owner, head grower, or operations contact if mentioned, or null",
+  "contact_title": "Their role/title if known, or null",
+  "email": "Contact email if found (not generic info@), or null",
+  "confidence": "low / medium / high (confidence in extracted data)"
+}}
+
+IMPORTANT RULES:
+- Return ONLY the JSON object, no markdown formatting
+- Use true/false for booleans (not strings)
+- Use null for unknown/missing values (not empty string)
+- For arrays, use [] if empty
+- If they are ONLY a dispensary with no cultivation, set dispensary_only=true and business_type="dispensary"
+- If they grow AND dispense, set dispensary_only=false and business_type="mixed"
+- cultivation_type should reflect their PRIMARY method; use "mixed" if they clearly do multiple
+- indoor_sqft and canopy_sqft are different: indoor_sqft = total facility footprint; canopy_sqft = licensed plant canopy area
+
+Now analyze the cannabis business above and return the JSON:"""
+
+
+def build_hemp_prompt(website_text, business_name='', city='', state=''):
+    """
+    Build a hemp producer enrichment prompt.
+
+    Extracts ICP signals specific to hemp farming operations.
+    Hemp growers use field terminology: 'acres', 'harvest', 'CBD', 'fiber', 'seed',
+    'cover crop', 'rotation' — very different from nursery or cannabis language.
+
+    Field mapping to existing DB columns:
+      hemp_type         → crops_grown (stored as list, e.g. ['hemp_CBD', 'hemp_fiber'])
+      acreage           → acreage (existing column)
+      uses_amendments   → uses_growing_media
+      organic_certified → is_organic_certified
+
+    Args:
+        website_text: Extracted text from hemp business website
+        business_name: Name of the business (optional)
+        city: City location (optional)
+        state: State location (optional)
+
+    Returns:
+        str: Prompt string to send to Gemini
+    """
+    business_context = ''
+    if business_name:
+        business_context += f'\nBusiness Name: {business_name}'
+    if city and state:
+        business_context += f'\nLocation: {city}, {state}'
+
+    return f"""You are analyzing a hemp business website to determine if they are a potential buyer of bulk worm castings (vermicompost) for use as a field soil amendment in hemp production.
+
+Sweet Leaf Soil sells premium worm castings that hemp producers use to:
+- Amend soil between crop cycles to restore microbial life
+- Apply as a top dressing around hemp plants
+- Improve soil tilth and water retention on sandy or compacted ground
+- Transition toward organic or regenerative practices{business_context}
+
+Website Content:
+{website_text[:15000]}
+
+EXTRACTION FOCUS — Hemp Producer ICP Signals:
+
+1. HEMP TYPE (Determines amendment need and buying window)
+   - CBD / Flower: high-value crop, usually small acreage, best organic inputs → HIGH value
+   - Fiber: large acreage, commodity crop, lower margin → MEDIUM value
+   - Seed / Grain: food hemp, dual-purpose → MEDIUM value
+   - Dual-purpose: fiber + CBD, or grain + fiber → MEDIUM-HIGH value
+   - If type is unclear but they clearly grow hemp, mark as "mixed"
+
+2. ACREAGE (Volume signal — larger = more amendments needed)
+   - Look for: "200 acres of hemp", "planted 50 acres", "our farm is 1,000 acres"
+   - Fractional/small acreage (< 10 acres) = test buyer; larger = commercial buyer
+   - If no acreage mentioned, extract farm size if available
+
+3. PROCESSING & VALUE ADD (Signals sophistication and premium practices)
+   - Do they process on-site? (extraction, drying, decorticating, baling)
+   - On-site processing = more invested in quality → more likely to buy premium inputs
+
+4. AMENDMENT & ORGANIC SIGNALS (Direct buying signal)
+   - Do they mention soil health, amendments, compost, organic matter?
+   - Cover cropping, crop rotation, no-till = regenerative practices → HIGH signal
+   - "USDA Organic certified" or state organic cert = premium buyer
+   - Any explicit mention of worm castings / vermicompost = VERY HIGH priority
+
+5. BUSINESS TYPE (Qualifier)
+   - hemp_grower: farms hemp (primary target)
+   - hemp_processor: buys raw hemp and processes it, does not grow → qualify only if also grows
+   - hemp_retailer: sells hemp products (CBD store, etc.) — no grow operation → DISQUALIFY
+   - If they grow AND process, use hemp_grower
+
+6. DISQUALIFICATION SIGNALS
+   - Retail CBD store with no farm: no soil needs
+   - Hemp consulting / software / compliance company
+   - Processor-only with no grow operations
+
+Extract and return ONLY a valid JSON object (no markdown, no explanation):
+
+{{
+  "business_type": "hemp_grower / hemp_processor / hemp_retailer / mixed / unknown",
+  "hemp_type": "fiber / CBD / seed / grain / dual-purpose / mixed / unknown (primary hemp crop type)",
+  "acreage": "Number of acres under hemp cultivation (float), or null if not mentioned",
+  "processing_on_site": true/false (Do they process hemp on site — extraction, drying, baling, decorticating?),
+  "uses_amendments": true/false (Do they mention soil amendments, compost, organic matter, cover crops?),
+  "organic_certified": true/false (USDA Organic, state cert, or explicitly stated organic practices?),
+  "market_channel": "wholesale / retail / both / unknown (How do they sell their hemp/products?)",
+  "multiple_locations": true/false (Multiple farm locations or facilities?),
+  "crops_grown": ["hemp — include specific type like 'hemp_CBD', 'hemp_fiber', 'hemp_grain' if known"],
+  "scale_indicators": ["Array of specific scale quotes: '200 acres', '50,000 lb harvest', 'family farm since 1985'"],
+  "disqualification_signals": ["Array of red flags: 'retail CBD store', 'no grow operation', 'processor only'"],
+  "contact_name": "Full name of farm owner, farm manager, or operations contact if mentioned, or null",
+  "contact_title": "Their role/title if known, or null",
+  "email": "Contact email if found (not generic info@), or null",
+  "confidence": "low / medium / high (confidence in extracted data)"
+}}
+
+IMPORTANT RULES:
+- Return ONLY the JSON object, no markdown formatting
+- Use true/false for booleans (not strings)
+- Use null for unknown/missing values (not empty string)
+- For arrays, use [] if empty
+- hemp_type should reflect their PRIMARY crop type; use "dual-purpose" or "mixed" if they clearly do multiple
+- acreage should be a number (e.g., 200 not "200 acres") — extract the number only
+- hemp_retailer with no grow operation = disqualify (no soil needs)
+
+Now analyze the hemp business above and return the JSON:"""
+
+
+def _normalize_cannabis_response(data):
+    """
+    Map cannabis prompt response fields to existing DB column names.
+
+    This ensures the response from the cannabis prompt is compatible with
+    the existing leads table schema without requiring any schema changes.
+
+    Mapping:
+      cultivation_type  → production_method
+      indoor_sqft       → greenhouse_sqft  (if canopy_sqft is null)
+      canopy_sqft       → greenhouse_sqft  (preferred; indoor_sqft as fallback)
+      uses_amendments   → uses_growing_media
+      dispensary_only   → negative_indicators.dispensary_only
+      organic_certified → is_organic_certified
+
+    Args:
+        data: Raw dict from Gemini cannabis response
+
+    Returns:
+        dict: Normalized dict with existing column names
+    """
+    normalized = dict(data)
+
+    # cultivation_type → production_method
+    if 'cultivation_type' in normalized:
+        normalized['production_method'] = normalized.pop('cultivation_type')
+
+    # canopy_sqft / indoor_sqft → greenhouse_sqft (canopy_sqft preferred)
+    canopy = normalized.pop('canopy_sqft', None)
+    indoor = normalized.pop('indoor_sqft', None)
+    if canopy is not None:
+        normalized['greenhouse_sqft'] = canopy
+    elif indoor is not None:
+        normalized['greenhouse_sqft'] = indoor
+
+    # uses_amendments → uses_growing_media
+    if 'uses_amendments' in normalized:
+        normalized['uses_growing_media'] = normalized.pop('uses_amendments')
+
+    # organic_certified → is_organic_certified
+    if 'organic_certified' in normalized:
+        normalized['is_organic_certified'] = normalized.pop('organic_certified')
+
+    # dispensary_only → negative_indicators.dispensary_only (JSON dict)
+    dispensary_only = normalized.pop('dispensary_only', None)
+    if dispensary_only is not None:
+        neg_indicators = normalized.get('negative_indicators', {}) or {}
+        if not isinstance(neg_indicators, dict):
+            neg_indicators = {}
+        neg_indicators['dispensary_only'] = dispensary_only
+        normalized['negative_indicators'] = neg_indicators
+
+    # Ensure standard nursery-compatible fields exist with sensible defaults
+    if 'is_wholesale' not in normalized:
+        normalized['is_wholesale'] = False
+    if 'is_retail' not in normalized:
+        normalized['is_retail'] = False
+    if 'container_production' not in normalized:
+        # Cannabis cultivators use containers — default true if indoor/greenhouse
+        pm = normalized.get('production_method', '')
+        normalized['container_production'] = pm in ('indoor', 'greenhouse', 'mixed')
+    if 'soil_relevance' not in normalized:
+        normalized['soil_relevance'] = True  # Cannabis cultivators always relevant
+    if 'size_signals' not in normalized:
+        normalized['size_signals'] = []
+    if 'organic_focus' not in normalized:
+        normalized['organic_focus'] = normalized.get('is_organic_certified', False) or False
+    if 'multiple_locations' not in normalized:
+        normalized['multiple_locations'] = False
+    if 'appointment_only' not in normalized:
+        normalized['appointment_only'] = False
+    if 'closed_weekends' not in normalized:
+        normalized['closed_weekends'] = False
+    if 'purchases_soil' not in normalized:
+        normalized['purchases_soil'] = normalized.get('uses_growing_media', False) or False
+    if 'soil_brands_mentioned' not in normalized:
+        normalized['soil_brands_mentioned'] = []
+
+    # Ensure arrays
+    for field in ['crops_grown', 'scale_indicators', 'size_signals',
+                  'disqualification_signals', 'soil_brands_mentioned']:
+        if field not in normalized or normalized[field] is None:
+            normalized[field] = []
+
+    # Ensure negative_indicators is a dict
+    if not isinstance(normalized.get('negative_indicators'), dict):
+        normalized['negative_indicators'] = {}
+
+    return normalized
+
+
+def _normalize_hemp_response(data):
+    """
+    Map hemp prompt response fields to existing DB column names.
+
+    Mapping:
+      hemp_type         → prepended to crops_grown list (e.g., 'hemp_CBD')
+      acreage           → acreage (already a column)
+      uses_amendments   → uses_growing_media
+      organic_certified → is_organic_certified
+      processing_on_site→ stored in negative_indicators (positive signal, not a disqualifier)
+
+    Args:
+        data: Raw dict from Gemini hemp response
+
+    Returns:
+        dict: Normalized dict with existing column names
+    """
+    normalized = dict(data)
+
+    # hemp_type → prepend to crops_grown with 'hemp_' prefix for clarity
+    hemp_type = normalized.pop('hemp_type', None)
+    crops_grown = normalized.get('crops_grown', []) or []
+    if hemp_type and hemp_type not in ('unknown', 'mixed'):
+        typed_crop = f'hemp_{hemp_type}' if not hemp_type.startswith('hemp') else hemp_type
+        if typed_crop not in crops_grown:
+            crops_grown = [typed_crop] + [c for c in crops_grown if c != typed_crop]
+    elif 'hemp' not in crops_grown:
+        crops_grown = ['hemp'] + crops_grown
+    normalized['crops_grown'] = crops_grown
+
+    # acreage stays as acreage (existing column)
+    # Nothing to map — already correct field name
+
+    # uses_amendments → uses_growing_media
+    if 'uses_amendments' in normalized:
+        normalized['uses_growing_media'] = normalized.pop('uses_amendments')
+
+    # organic_certified → is_organic_certified
+    if 'organic_certified' in normalized:
+        normalized['is_organic_certified'] = normalized.pop('organic_certified')
+
+    # processing_on_site → stored in negative_indicators for now (not a disqualifier, just context)
+    processing_on_site = normalized.pop('processing_on_site', None)
+    if processing_on_site is not None:
+        neg_indicators = normalized.get('negative_indicators', {}) or {}
+        if not isinstance(neg_indicators, dict):
+            neg_indicators = {}
+        neg_indicators['processing_on_site'] = processing_on_site
+        normalized['negative_indicators'] = neg_indicators
+
+    # Hemp producers are field-grown by default
+    if 'production_method' not in normalized:
+        normalized['production_method'] = 'field'
+
+    # Ensure standard nursery-compatible fields exist with sensible defaults
+    if 'is_wholesale' not in normalized:
+        mc = normalized.get('market_channel', '')
+        normalized['is_wholesale'] = mc in ('wholesale', 'both')
+    if 'is_retail' not in normalized:
+        mc = normalized.get('market_channel', '')
+        normalized['is_retail'] = mc in ('retail', 'both')
+    if 'container_production' not in normalized:
+        normalized['container_production'] = False  # Hemp is field-grown
+    if 'soil_relevance' not in normalized:
+        normalized['soil_relevance'] = True
+    if 'size_signals' not in normalized:
+        normalized['size_signals'] = []
+    if 'organic_focus' not in normalized:
+        normalized['organic_focus'] = normalized.get('is_organic_certified', False) or False
+    if 'multiple_locations' not in normalized:
+        normalized['multiple_locations'] = False
+    if 'appointment_only' not in normalized:
+        normalized['appointment_only'] = False
+    if 'closed_weekends' not in normalized:
+        normalized['closed_weekends'] = False
+    if 'purchases_soil' not in normalized:
+        normalized['purchases_soil'] = normalized.get('uses_growing_media', False) or False
+    if 'soil_brands_mentioned' not in normalized:
+        normalized['soil_brands_mentioned'] = []
+
+    # Ensure arrays
+    for field in ['crops_grown', 'scale_indicators', 'size_signals',
+                  'disqualification_signals', 'soil_brands_mentioned']:
+        if field not in normalized or normalized[field] is None:
+            normalized[field] = []
+
+    # Ensure negative_indicators is a dict
+    if not isinstance(normalized.get('negative_indicators'), dict):
+        normalized['negative_indicators'] = {}
+
+    return normalized
+
+
+def enrich_lead_with_gemini(website_text, business_name, city, state, segment='nursery'):
+    """
+    Enrich a lead using Gemini to analyze website content.
+
+    Routes to the appropriate segment-specific prompt builder based on the
+    lead's segment. Defaults to the nursery prompt for unknown segments.
+
+    Args:
+        website_text: Extracted text from website
+        business_name: Name of the business
+        city: City location
+        state: State location
+        segment: Lead segment — 'nursery' (default), 'cannabis_grower', or 'hemp_producer'
+
+    Returns:
+        dict: Enriched data extracted from website, fields normalized to existing column names
+
+    Raises:
+        Exception: If API call fails or data is invalid
+    """
+
+    # Validate input
+    if not website_text or len(website_text) < 100:
+        raise ValueError("Insufficient website text for analysis")
+
+    # --- Route to segment-appropriate prompt builder ---
+    if segment == 'cannabis_grower':
+        prompt = build_cannabis_prompt(website_text, business_name, city, state)
+    elif segment == 'hemp_producer':
+        prompt = build_hemp_prompt(website_text, business_name, city, state)
+    else:
+        # Default: nursery prompt (unchanged)
+        prompt = build_nursery_prompt(website_text, business_name, city, state)
+
     # Call Gemini
     try:
         data = call_gemini(prompt)
 
-        # Validate required fields exist (including new ICP fields)
-        required_fields = [
-            'business_type', 'is_wholesale', 'is_retail', 'container_production',
-            'soil_relevance', 'negative_indicators', 'confidence',
-            # Phase 2: New ICP fields
-            'uses_growing_media', 'production_method', 'scale_indicators', 'disqualification_signals'
-        ]
+        # --- Segment-specific validation and field normalization ---
+        if segment == 'cannabis_grower':
+            # Validate cannabis-specific required fields
+            cannabis_required = ['business_type', 'cultivation_type', 'uses_amendments',
+                                 'dispensary_only', 'confidence']
+            for field in cannabis_required:
+                if field not in data:
+                    raise ValueError(f"Cannabis prompt missing required field: {field}")
 
-        for field in required_fields:
-            if field not in data:
-                raise ValueError(f"Missing required field: {field}")
+            # Ensure cannabis arrays
+            for arr_field in ['crops_grown', 'scale_indicators', 'disqualification_signals']:
+                if arr_field not in data or data[arr_field] is None:
+                    data[arr_field] = []
 
-        # Validate negative_indicators is a dict
-        if not isinstance(data.get('negative_indicators'), dict):
-            raise ValueError("negative_indicators must be a dictionary")
+            # Normalize cannabis fields → existing column names
+            data = _normalize_cannabis_response(data)
 
-        # Ensure arrays are arrays
-        if 'size_signals' not in data or data['size_signals'] is None:
-            data['size_signals'] = []
-        if 'crops_grown' not in data or data['crops_grown'] is None:
-            data['crops_grown'] = []
-        # Phase 2: New ICP array fields
-        if 'scale_indicators' not in data or data['scale_indicators'] is None:
-            data['scale_indicators'] = []
-        if 'soil_brands_mentioned' not in data or data['soil_brands_mentioned'] is None:
-            data['soil_brands_mentioned'] = []
-        if 'disqualification_signals' not in data or data['disqualification_signals'] is None:
-            data['disqualification_signals'] = []
+        elif segment == 'hemp_producer':
+            # Validate hemp-specific required fields
+            hemp_required = ['business_type', 'hemp_type', 'uses_amendments',
+                             'organic_certified', 'confidence']
+            for field in hemp_required:
+                if field not in data:
+                    raise ValueError(f"Hemp prompt missing required field: {field}")
+
+            # Ensure hemp arrays
+            for arr_field in ['crops_grown', 'scale_indicators', 'disqualification_signals']:
+                if arr_field not in data or data[arr_field] is None:
+                    data[arr_field] = []
+
+            # Normalize hemp fields → existing column names
+            data = _normalize_hemp_response(data)
+
+        else:
+            # Nursery: existing validation (unchanged)
+            required_fields = [
+                'business_type', 'is_wholesale', 'is_retail', 'container_production',
+                'soil_relevance', 'negative_indicators', 'confidence',
+                # Phase 2: New ICP fields
+                'uses_growing_media', 'production_method', 'scale_indicators', 'disqualification_signals'
+            ]
+
+            for field in required_fields:
+                if field not in data:
+                    raise ValueError(f"Missing required field: {field}")
+
+            # Validate negative_indicators is a dict
+            if not isinstance(data.get('negative_indicators'), dict):
+                raise ValueError("negative_indicators must be a dictionary")
+
+            # Ensure arrays are arrays
+            if 'size_signals' not in data or data['size_signals'] is None:
+                data['size_signals'] = []
+            if 'crops_grown' not in data or data['crops_grown'] is None:
+                data['crops_grown'] = []
+            # Phase 2: New ICP array fields
+            if 'scale_indicators' not in data or data['scale_indicators'] is None:
+                data['scale_indicators'] = []
+            if 'soil_brands_mentioned' not in data or data['soil_brands_mentioned'] is None:
+                data['soil_brands_mentioned'] = []
+            if 'disqualification_signals' not in data or data['disqualification_signals'] is None:
+                data['disqualification_signals'] = []
 
         return data
 

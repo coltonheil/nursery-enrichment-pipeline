@@ -1,0 +1,15 @@
+{
+  "importer": "mt_revenue",
+  "dry_run": true,
+  "fetched": 3,
+  "new": 3,
+  "existing": 0,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "pdf_source": "",
+  "input_file": "scripts/importers/evidence/mt_manual_fallback.csv",
+  "diagnostics": {
+    "accepted_manual": 3
+  }
+}

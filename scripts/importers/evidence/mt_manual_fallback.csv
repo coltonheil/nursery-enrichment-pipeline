@@ -1,0 +1,4 @@
+business_name,city,state,license_number,license_type,license_status,address,zip,county
+Demo MT Cultivator One,Bozeman,MT,MT-TEST-001,cannabis_cultivator,active,101 Main St,59715,Gallatin
+Demo MT Cultivator Two,Missoula,MT,MT-TEST-002,cannabis_cultivator,active,202 Front St,59802,Missoula
+Demo MT Cultivator Three,Billings,MT,,cannabis_cultivator,active,303 Broadwater Ave,59101,Yellowstone

@@ -1,0 +1,18 @@
+{
+  "importer": "mt_revenue",
+  "dry_run": true,
+  "fetched": 0,
+  "new": 0,
+  "existing": 0,
+  "errors": 1,
+  "blocked": false,
+  "status": "failed_empty_fetch",
+  "pdf_source": "https://revenuefiles.mt.gov/files/Cannabis/Licensed-Cultivator-List.pdf",
+  "input_file": "",
+  "diagnostics": {
+    "lines_total": 549,
+    "matched_pdf": 0,
+    "unmatched_pdf": 549,
+    "reject_missing_name_pdf": 0
+  }
+}

@@ -123,6 +123,29 @@ Scope: MI / OR / IL / USDA / MT importer hardening + verification only.
 - Rerun dry: `python3 scripts/importers/import_or_olcc.py --dry-run --summary-json outputs/phase1_evidence/or_official_rerun_dry.json`
   - result: `new=0`, `existing=1380`, idempotency confirmed
 
+## Checkpoint E — MT official-source unlock (2026-02-18)
+
+### Tavily-first discovery
+- Query: `Montana Department of Revenue cannabis license list cultivator`
+- Official-source hit used: `https://revenuefiles.mt.gov/files/Cannabis/Licensed-Cultivator-List.pdf`
+
+### Importer change
+- `import_mt_revenue.py`
+  - Replaced brittle line regex parser with column-aware `pdfplumber.extract_words()` parser using official PDF geometry.
+  - Added wrapped-name handling and row diagnostics for matched/unmatched lines.
+
+### Runs
+- Dry: `python3 scripts/importers/import_mt_revenue.py --pdf-url 'https://revenuefiles.mt.gov/files/Cannabis/Licensed-Cultivator-List.pdf' --dry-run --summary-json outputs/phase1_evidence/mt_official_dry.json`
+  - result: `fetched=327`, `new=327`, `existing=0`, `status=ok`
+- Live: `python3 scripts/importers/import_mt_revenue.py --pdf-url 'https://revenuefiles.mt.gov/files/Cannabis/Licensed-Cultivator-List.pdf' --summary-json outputs/phase1_evidence/mt_official_live.json`
+  - result: `new=282`, `existing=45`, `status=ok`
+- Rerun dry: `python3 scripts/importers/import_mt_revenue.py --pdf-url 'https://revenuefiles.mt.gov/files/Cannabis/Licensed-Cultivator-List.pdf' --dry-run --summary-json outputs/phase1_evidence/mt_official_rerun_dry.json`
+  - result: `new=0`, `existing=327`, idempotency confirmed
+
+## Current blockers snapshot (post-E)
+- `mi_cra`: still `failed_empty_fetch` on automated Accela flow (`outputs/phase1_evidence/mi_dry_latest.json`).
+- `usda_hemp`: still `blocked_no_source` until an official/public CSV export URL is provided (`outputs/phase1_evidence/usda_dry_latest.json`).
+
 ## Data quality checks
 (Null `business_name`, null `state`, and `promoted_at` null by source)
 

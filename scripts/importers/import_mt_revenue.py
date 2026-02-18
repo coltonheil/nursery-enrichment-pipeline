@@ -110,20 +110,63 @@ def parse_pdf(pdf_path: str):
         'reject_missing_name_pdf': 0,
     }
 
+    # Column geometry from official MT PDF:
+    # Licensee Name | City | Location Name | Phone
+    NAME_MAX_X = 216
+    CITY_MIN_X, CITY_MAX_X = 216, 288
+    LOC_MIN_X, LOC_MAX_X = 288, 522
+    PHONE_MIN_X = 522
+
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            text = page.extract_text() or ''
-            for ln in [x.strip() for x in text.splitlines() if x.strip()]:
+            words = page.extract_words() or []
+            rows = {}
+            for w in words:
+                top = round(float(w.get('top', 0)), 1)
+                rows.setdefault(top, []).append(w)
+
+            pending_name = ''
+            for _, row_words in sorted(rows.items(), key=lambda kv: kv[0]):
+                row_words = sorted(row_words, key=lambda x: x['x0'])
+                texts = [w['text'] for w in row_words]
+                line = ' '.join(texts).strip()
+                if not line:
+                    continue
                 diagnostics['lines_total'] += 1
-                m = re.search(r'^(.*?)\s+([A-Za-z .\'-]+),\s*MT\s*(\d{5})?.*?(LIC\w+|\d{4,})?$', ln)
-                if not m:
+
+                # Skip header/footer/noise lines
+                lower = line.lower()
+                if any(k in lower for k in [
+                    'governor', 'director', 'cannabis control division', 'licensed cultivator locations',
+                    'licensee’s name city location name phone', 'page of', 'revenue.mt.gov', 'montana relay'
+                ]):
+                    continue
+
+                has_phone = any(w['x0'] >= PHONE_MIN_X for w in row_words)
+                if not has_phone:
+                    # Wrapped continuation line for long business names
+                    if all(w['x0'] < NAME_MAX_X for w in row_words):
+                        pending_name = (pending_name + ' ' + line).strip() if pending_name else line
                     diagnostics['unmatched_pdf'] += 1
                     continue
 
-                name = m.group(1).strip(' -')
-                city = (m.group(2) or '').strip()
-                zip_code = (m.group(3) or '').strip()
-                lic = (m.group(4) or '').strip() or None
+                name_tokens = [w['text'] for w in row_words if w['x0'] < NAME_MAX_X]
+                city_tokens = [w['text'] for w in row_words if CITY_MIN_X <= w['x0'] < CITY_MAX_X]
+                loc_tokens = [w['text'] for w in row_words if LOC_MIN_X <= w['x0'] < LOC_MAX_X]
+                phone_tokens = [w['text'] for w in row_words if w['x0'] >= PHONE_MIN_X]
+
+                name = (' '.join(name_tokens)).strip()
+                if pending_name:
+                    name = (pending_name + ' ' + name).strip() if name else pending_name
+                    pending_name = ''
+
+                city = (' '.join(city_tokens)).strip()
+                if not city:
+                    # fallback: first token from location column
+                    city = (loc_tokens[0] if loc_tokens else '').strip()
+
+                phone = ' '.join(phone_tokens).strip()
+
                 if not name:
                     diagnostics['reject_missing_name_pdf'] += 1
                     continue
@@ -131,15 +174,15 @@ def parse_pdf(pdf_path: str):
                 diagnostics['matched_pdf'] += 1
                 records.append({
                     'business_name': name,
-                    'license_number': lic,
+                    'license_number': None,
                     'license_type': 'cannabis_cultivator',
                     'license_status': 'active',
-                    'address': '',
+                    'address': ' '.join(loc_tokens).strip(),
                     'city': city,
                     'state': 'MT',
-                    'zip': zip_code,
+                    'zip': '',
                     'county': '',
-                    'raw_data': json.dumps({'line': ln, 'source': os.path.basename(pdf_path)}),
+                    'raw_data': json.dumps({'line': line, 'phone': phone, 'source': os.path.basename(pdf_path)}),
                 })
 
     return records, diagnostics

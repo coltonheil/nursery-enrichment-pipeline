@@ -1,0 +1,13 @@
+{
+  "importer": "mt_revenue",
+  "dry_run": false,
+  "fetched": 0,
+  "new": 0,
+  "existing": 0,
+  "errors": 1,
+  "blocked": true,
+  "status": "blocked_no_source",
+  "blocking_reason": "no stable public CSV/API endpoint identified and no source file provided",
+  "pdf_source": "",
+  "input_file": ""
+}

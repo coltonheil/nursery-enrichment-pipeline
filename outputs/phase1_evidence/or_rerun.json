@@ -1,0 +1,10 @@
+{
+  "importer": "or_olcc",
+  "dry_run": true,
+  "fetched": 0,
+  "new": 0,
+  "existing": 0,
+  "errors": 1,
+  "blocked": false,
+  "status": "failed_empty_fetch"
+}

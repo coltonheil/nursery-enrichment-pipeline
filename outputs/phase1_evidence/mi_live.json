@@ -1,0 +1,10 @@
+{
+  "importer": "mi_cra",
+  "dry_run": false,
+  "fetched": 0,
+  "new": 0,
+  "existing": 0,
+  "errors": 1,
+  "blocked": false,
+  "status": "failed_empty_fetch"
+}

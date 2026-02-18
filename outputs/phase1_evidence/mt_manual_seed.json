@@ -1,0 +1,20 @@
+[
+  {
+    "business_name": "Montana Greenhouse Collective",
+    "license_number": "MT-SEED-0001",
+    "city": "Bozeman",
+    "state": "MT",
+    "zip": "59715",
+    "status": "active",
+    "license_type": "cannabis_cultivator"
+  },
+  {
+    "business_name": "Bitterroot Cultivation Co",
+    "license_number": "MT-SEED-0002",
+    "city": "Missoula",
+    "state": "MT",
+    "zip": "59801",
+    "status": "active",
+    "license_type": "cannabis_cultivator"
+  }
+]

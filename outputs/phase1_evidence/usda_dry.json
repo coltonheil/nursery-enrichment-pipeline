@@ -1,0 +1,12 @@
+{
+  "importer": "usda_hemp",
+  "dry_run": true,
+  "fetched": 0,
+  "new": 0,
+  "existing": 0,
+  "errors": 1,
+  "blocked": true,
+  "status": "blocked_no_source",
+  "blocking_reason": "USDA HeMP producer-level public CSV URL not configured. Portal endpoints are authenticated/JS-driven. Set USDA_HEMP_CSV_URL or pass --csv-url with an exported USDA producer CSV.",
+  "csv_url": ""
+}

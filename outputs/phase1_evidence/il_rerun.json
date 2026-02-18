@@ -1,0 +1,12 @@
+{
+  "importer": "il_idfpr",
+  "source_label": "Illinois Department of Agriculture (IDOA) licensee list",
+  "dry_run": true,
+  "fetched": 227,
+  "new": 0,
+  "existing": 227,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "source_url": "https://agr.illinois.gov/content/dam/soi/en/web/agr/documents/idoa-licensee-list.pdf"
+}

@@ -1,0 +1,15 @@
+{
+  "importer": "mt_revenue",
+  "dry_run": false,
+  "fetched": 2,
+  "new": 2,
+  "existing": 0,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "pdf_source": "",
+  "input_file": "outputs/phase1_evidence/mt_manual_seed.json",
+  "diagnostics": {
+    "accepted_manual": 2
+  }
+}

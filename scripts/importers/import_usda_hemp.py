@@ -2,10 +2,17 @@
 """
 USDA hemp importer for target states: MN/WI/MI/IL/IA/IN/OH.
 
-Notes:
-- USDA HeMP producer-level registry is behind authenticated HeMP portal flows.
-- This importer supports direct CSV ingestion when a USDA-exported CSV is provided,
-  and documents blocking reason when no CSV source is available.
+Acquisition strategy (reproducible):
+1) Discover source via USDA HeMP public search/program pages:
+   - https://hemp.ams.usda.gov/s/PublicSearchTool
+   - https://www.ams.usda.gov/rules-regulations/hemp/information-for-hemp-growers
+2) Ingest only a direct USDA-exported CSV supplied by:
+   - env var `USDA_HEMP_CSV_URL`, or
+   - CLI flag `--csv-url`
+3) If no direct CSV is configured, importer exits blocked with explicit reason.
+
+Reference snapshot dataset (FOIA PDF, non-CSV):
+- https://www.ams.usda.gov/sites/default/files/media/FOIAUSDAHempLicensees.pdf
 
 Registry source: usda_hemp
 Segment: hemp_producer
@@ -30,6 +37,36 @@ SEGMENT = 'hemp_producer'
 TARGET_STATES = {'MN', 'WI', 'MI', 'IL', 'IA', 'IN', 'OH'}
 
 DEFAULT_CSV_URL = os.environ.get('USDA_HEMP_CSV_URL', '').strip()
+NAME_FIELDS = ['producer_name', 'business_name', 'name']
+STATE_FIELDS = ['state', 'producer_state']
+
+
+def _norm_header(h: str) -> str:
+    return (h or '').strip().lower().replace(' ', '_')
+
+
+def validate_schema(rows: list[dict]):
+    if not rows:
+        return False, [], ['CSV contained zero rows after header parse']
+
+    headers = {_norm_header(k) for k in rows[0].keys()}
+    warnings = []
+    errors = []
+
+    has_name = any(f in headers for f in NAME_FIELDS)
+    has_state = any(f in headers for f in STATE_FIELDS)
+
+    if not has_name:
+        errors.append(f'Missing required name field. Acceptable columns: {NAME_FIELDS}')
+    if not has_state:
+        errors.append(f'Missing required state field. Acceptable columns: {STATE_FIELDS}')
+
+    optional_expected = ['license_number', 'registration_number', 'status', 'license_status', 'city', 'county', 'postal_code', 'zip']
+    missing_optional = [c for c in optional_expected if c not in headers]
+    if missing_optional:
+        warnings.append(f'Missing optional columns: {missing_optional}')
+
+    return len(errors) == 0, warnings, errors
 
 
 def fetch_csv_rows(csv_url: str):
@@ -59,9 +96,11 @@ def normalize_row(row: dict):
     acreage = (row.get('acreage') or row.get('total_acres') or '').strip()
 
     if state and state not in TARGET_STATES:
-        return None
-    if not name or not state:
-        return None
+        return None, 'filtered_non_target_state'
+    if not name:
+        return None, 'reject_missing_name'
+    if not state:
+        return None, 'reject_missing_state'
 
     raw = dict(row)
     if acreage:
@@ -78,7 +117,7 @@ def normalize_row(row: dict):
         'zip': zip_code,
         'county': county,
         'raw_data': json.dumps(raw),
-    }
+    }, 'accepted'
 
 
 def insert_records(records, dry_run=False):
@@ -162,6 +201,8 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
     rows, blocking_reason = fetch_csv_rows(csv_url)
     if rows is None:
         print(f'[USDA HEMP] BLOCKED: {blocking_reason}')
+        print('[USDA HEMP] HINT: discover source at https://hemp.ams.usda.gov/s/PublicSearchTool')
+        print('[USDA HEMP] HINT: set USDA_HEMP_CSV_URL or pass --csv-url <usda-export.csv>')
         print('[USDA HEMP] No DB writes performed.')
         summary = {
             'importer': 'usda_hemp',
@@ -178,9 +219,33 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
         _write_summary(summary_json, summary)
         return 3
 
+    schema_ok, schema_warnings, schema_errors = validate_schema(rows)
+    for w in schema_warnings:
+        print(f'[USDA HEMP] WARNING: {w}')
+    if not schema_ok:
+        for e in schema_errors:
+            print(f'[USDA HEMP] ERROR: {e}')
+        summary = {
+            'importer': 'usda_hemp',
+            'dry_run': dry_run,
+            'fetched': 0,
+            'new': 0,
+            'existing': 0,
+            'errors': len(schema_errors),
+            'blocked': False,
+            'status': 'schema_invalid',
+            'schema_warnings': schema_warnings,
+            'schema_errors': schema_errors,
+            'csv_url': csv_url,
+        }
+        _write_summary(summary_json, summary)
+        return 4
+
     normalized = []
+    diagnostics = {}
     for row in rows:
-        rec = normalize_row(row)
+        rec, reason = normalize_row(row)
+        diagnostics[reason] = diagnostics.get(reason, 0) + 1
         if rec:
             normalized.append(rec)
 
@@ -199,6 +264,8 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'blocked': False,
             'status': 'failed_empty_fetch',
             'csv_url': csv_url,
+            'schema_warnings': schema_warnings,
+            'diagnostics': diagnostics,
         }
         _write_summary(summary_json, summary)
         return 2 if fail_on_empty_fetch else 0
@@ -220,6 +287,8 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
         'blocked': False,
         'status': 'ok',
         'csv_url': csv_url,
+        'schema_warnings': schema_warnings,
+        'diagnostics': diagnostics,
     }
     _write_summary(summary_json, summary)
     return 0

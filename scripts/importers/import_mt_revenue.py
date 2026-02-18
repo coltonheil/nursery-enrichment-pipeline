@@ -4,6 +4,7 @@ Montana Revenue cannabis cultivator importer.
 
 Phase 1 importer with explicit blocker behavior and manual-source support:
 - Accepts PDF URL/path (best-effort parsing)
+- Accepts manual CSV/JSON input (`--input-file`) as fallback source
 - Returns clear blocked status when no source is provided
 
 Registry source: mt_revenue
@@ -11,6 +12,7 @@ Segment: cannabis_grower
 """
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -45,21 +47,88 @@ def _load_pdf_path(pdf_source: str):
     raise FileNotFoundError(pdf_source)
 
 
+def _normalize_manual_row(row: dict):
+    name = (row.get('business_name') or row.get('name') or '').strip()
+    if not name:
+        return None, 'reject_missing_name'
+
+    state = (row.get('state') or 'MT').strip().upper()
+    if state != 'MT':
+        return None, 'filtered_non_mt_state'
+
+    license_number = (row.get('license_number') or row.get('license') or '').strip() or None
+    city = (row.get('city') or '').strip()
+    zip_code = (row.get('zip') or row.get('postal_code') or '').strip()
+
+    rec = {
+        'business_name': name,
+        'license_number': license_number,
+        'license_type': (row.get('license_type') or 'cannabis_cultivator').strip().lower(),
+        'license_status': (row.get('status') or row.get('license_status') or 'active').strip().lower(),
+        'address': (row.get('address') or '').strip(),
+        'city': city,
+        'state': 'MT',
+        'zip': zip_code,
+        'county': (row.get('county') or '').strip(),
+        'raw_data': json.dumps(dict(row)),
+    }
+    return rec, 'accepted_manual'
+
+
+def parse_manual_input(input_file: str):
+    path = Path(input_file)
+    if not path.exists():
+        raise FileNotFoundError(input_file)
+
+    diagnostics = {'accepted_manual': 0}
+    records = []
+
+    if path.suffix.lower() == '.json':
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        rows = payload if isinstance(payload, list) else payload.get('rows', [])
+    elif path.suffix.lower() == '.csv':
+        with path.open('r', encoding='utf-8', newline='') as f:
+            rows = list(csv.DictReader(f))
+    else:
+        raise RuntimeError('Manual input must be .csv or .json')
+
+    for row in rows:
+        rec, reason = _normalize_manual_row(row)
+        diagnostics[reason] = diagnostics.get(reason, 0) + 1
+        if rec:
+            records.append(rec)
+
+    return records, diagnostics
+
+
 def parse_pdf(pdf_path: str):
     records = []
+    diagnostics = {
+        'lines_total': 0,
+        'matched_pdf': 0,
+        'unmatched_pdf': 0,
+        'reject_missing_name_pdf': 0,
+    }
+
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             text = page.extract_text() or ''
             for ln in [x.strip() for x in text.splitlines() if x.strip()]:
+                diagnostics['lines_total'] += 1
                 m = re.search(r'^(.*?)\s+([A-Za-z .\'-]+),\s*MT\s*(\d{5})?.*?(LIC\w+|\d{4,})?$', ln)
                 if not m:
+                    diagnostics['unmatched_pdf'] += 1
                     continue
+
                 name = m.group(1).strip(' -')
                 city = (m.group(2) or '').strip()
                 zip_code = (m.group(3) or '').strip()
                 lic = (m.group(4) or '').strip() or None
                 if not name:
+                    diagnostics['reject_missing_name_pdf'] += 1
                     continue
+
+                diagnostics['matched_pdf'] += 1
                 records.append({
                     'business_name': name,
                     'license_number': lic,
@@ -72,7 +141,8 @@ def parse_pdf(pdf_path: str):
                     'county': '',
                     'raw_data': json.dumps({'line': ln, 'source': os.path.basename(pdf_path)}),
                 })
-    return records
+
+    return records, diagnostics
 
 
 def insert_records(records, dry_run=False):
@@ -131,14 +201,28 @@ def _write_summary(summary_path: str, payload: dict):
     out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 
 
-def main(dry_run=False, pdf_source='', summary_json='', fail_on_empty_fetch=True):
+def main(dry_run=False, pdf_source='', input_file='', summary_json='', fail_on_empty_fetch=True):
     print(f'[MT REVENUE] Starting import (dry_run={dry_run})')
     migrate_db()
 
-    if not pdf_source:
+    records = []
+    diagnostics = {}
+
+    if input_file:
+        print(f'[MT REVENUE] Using manual fallback input: {input_file}')
+        records, diagnostics = parse_manual_input(input_file)
+    elif pdf_source:
+        pdf_path = _load_pdf_path(pdf_source)
+        cleanup = pdf_source.startswith('http')
+        try:
+            records, diagnostics = parse_pdf(pdf_path)
+        finally:
+            if cleanup and pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+    else:
         blocking_reason = 'no stable public CSV/API endpoint identified and no source file provided'
         print(f'[MT REVENUE] BLOCKED: {blocking_reason}.')
-        print('[MT REVENUE] Provide --pdf-url <url-or-path> to run best-effort parse.')
+        print('[MT REVENUE] Provide --pdf-url <url-or-path> or --input-file <csv|json>.')
         print('[MT REVENUE] No DB writes performed.')
         summary = {
             'importer': 'mt_revenue',
@@ -151,20 +235,15 @@ def main(dry_run=False, pdf_source='', summary_json='', fail_on_empty_fetch=True
             'status': 'blocked_no_source',
             'blocking_reason': blocking_reason,
             'pdf_source': pdf_source,
+            'input_file': input_file,
         }
         _write_summary(summary_json, summary)
         return 3
 
-    pdf_path = _load_pdf_path(pdf_source)
-    cleanup = pdf_source.startswith('http')
-    try:
-        records = parse_pdf(pdf_path)
-    finally:
-        if cleanup and pdf_path and os.path.exists(pdf_path):
-            os.remove(pdf_path)
-
     fetched_count = len(records)
-    print(f'[MT REVENUE] Parsed {fetched_count} records from PDF')
+    print(f'[MT REVENUE] Parsed {fetched_count} records')
+    if diagnostics:
+        print(f'[MT REVENUE] Parse diagnostics: {json.dumps(diagnostics, sort_keys=True)}')
 
     if fetched_count == 0:
         print('[MT REVENUE] ⚠️  Zero records parsed from provided source.')
@@ -178,6 +257,8 @@ def main(dry_run=False, pdf_source='', summary_json='', fail_on_empty_fetch=True
             'blocked': False,
             'status': 'failed_empty_fetch',
             'pdf_source': pdf_source,
+            'input_file': input_file,
+            'diagnostics': diagnostics,
         }
         _write_summary(summary_json, summary)
         return 2 if fail_on_empty_fetch else 0
@@ -198,21 +279,25 @@ def main(dry_run=False, pdf_source='', summary_json='', fail_on_empty_fetch=True
         'blocked': False,
         'status': 'ok',
         'pdf_source': pdf_source,
+        'input_file': input_file,
+        'diagnostics': diagnostics,
     }
     _write_summary(summary_json, summary)
     return 0
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Import Montana cannabis cultivators from PDF (best effort)')
+    parser = argparse.ArgumentParser(description='Import Montana cannabis cultivators from PDF/manual fallback')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--pdf-url', default='', help='PDF URL or local path')
+    parser.add_argument('--input-file', default='', help='Manual fallback path (.csv or .json)')
     parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
     parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when parse returns zero records')
     args = parser.parse_args()
     raise SystemExit(main(
         dry_run=args.dry_run,
         pdf_source=args.pdf_url,
+        input_file=args.input_file,
         summary_json=args.summary_json,
         fail_on_empty_fetch=not args.allow_empty_fetch,
     ))

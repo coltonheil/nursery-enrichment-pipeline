@@ -25,6 +25,8 @@ import json
 import os
 import sqlite3
 import sys
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -39,6 +41,14 @@ TARGET_STATES = {'MN', 'WI', 'MI', 'IL', 'IA', 'IN', 'OH'}
 DEFAULT_CSV_URL = os.environ.get('USDA_HEMP_CSV_URL', '').strip()
 NAME_FIELDS = ['producer_name', 'business_name', 'name']
 STATE_FIELDS = ['state', 'producer_state']
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def _norm_header(h: str) -> str:
@@ -71,7 +81,7 @@ def validate_schema(rows: list[dict]):
 
 def fetch_csv_rows(csv_url: str):
     if not csv_url:
-        return None, (
+        return None, None, (
             'USDA HeMP producer-level public CSV URL not configured. '
             'Portal endpoints are authenticated/JS-driven. Set USDA_HEMP_CSV_URL '
             'or pass --csv-url with an exported USDA producer CSV.'
@@ -79,21 +89,24 @@ def fetch_csv_rows(csv_url: str):
 
     r = requests.get(csv_url, timeout=90)
     r.raise_for_status()
-    text = r.text
+    raw_bytes = r.content
+    text = raw_bytes.decode('utf-8', errors='replace')
     reader = csv.DictReader(io.StringIO(text))
-    return list(reader), None
+    return list(reader), raw_bytes, None
 
 
 def parse_input_file(input_file: str):
     path = Path(input_file)
     if not path.exists():
         raise FileNotFoundError(input_file)
+    raw_bytes = path.read_bytes()
     if path.suffix.lower() == '.json':
-        payload = json.loads(path.read_text(encoding='utf-8'))
-        return payload if isinstance(payload, list) else payload.get('rows', [])
+        payload = json.loads(raw_bytes.decode('utf-8', errors='replace'))
+        rows = payload if isinstance(payload, list) else payload.get('rows', [])
+        return rows, raw_bytes
     if path.suffix.lower() == '.csv':
-        with path.open('r', encoding='utf-8', newline='') as f:
-            return list(csv.DictReader(f))
+        text = raw_bytes.decode('utf-8', errors='replace')
+        return list(csv.DictReader(io.StringIO(text))), raw_bytes
     raise RuntimeError('Manual input must be .csv or .json')
 
 
@@ -133,7 +146,7 @@ def normalize_row(row: dict):
     }, 'accepted'
 
 
-def insert_records(records, dry_run=False):
+def insert_records(records, dry_run=False, provenance=None):
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -156,8 +169,40 @@ def insert_records(records, dry_run=False):
                 'SELECT 1 FROM registries WHERE business_name = ? AND city = ? AND state = ? AND registry_source = ? LIMIT 1',
                 (name, city, rec['state'], REGISTRY_SOURCE),
             )
-        if cur.fetchone():
+        existing = cur.fetchone()
+        if existing:
             existing_count += 1
+            if not dry_run and provenance:
+                if license_number:
+                    cur.execute(
+                        '''UPDATE registries
+                           SET source_url = ?, fetch_timestamp = ?, artifact_sha256 = ?, import_batch_id = ?
+                           WHERE license_number = ? AND registry_source = ?''',
+                        (
+                            provenance.get('source_url', ''),
+                            provenance.get('fetch_timestamp', ''),
+                            provenance.get('artifact_sha256', ''),
+                            provenance.get('import_batch_id', ''),
+                            license_number,
+                            REGISTRY_SOURCE,
+                        ),
+                    )
+                else:
+                    cur.execute(
+                        '''UPDATE registries
+                           SET source_url = ?, fetch_timestamp = ?, artifact_sha256 = ?, import_batch_id = ?
+                           WHERE business_name = ? AND city = ? AND state = ? AND registry_source = ?''',
+                        (
+                            provenance.get('source_url', ''),
+                            provenance.get('fetch_timestamp', ''),
+                            provenance.get('artifact_sha256', ''),
+                            provenance.get('import_batch_id', ''),
+                            name,
+                            city,
+                            rec['state'],
+                            REGISTRY_SOURCE,
+                        ),
+                    )
             continue
 
         if dry_run:
@@ -169,8 +214,10 @@ def insert_records(records, dry_run=False):
                 '''INSERT OR IGNORE INTO registries
                    (business_name, license_number, license_type, license_status,
                     address, city, state, zip, county,
-                    registry_source, segment, raw_data, imported_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+                    registry_source, segment, raw_data,
+                    source_url, fetch_timestamp, artifact_sha256, import_batch_id,
+                    imported_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
                 (
                     name,
                     license_number,
@@ -184,6 +231,10 @@ def insert_records(records, dry_run=False):
                     REGISTRY_SOURCE,
                     SEGMENT,
                     rec.get('raw_data', '{}'),
+                    (provenance or {}).get('source_url', ''),
+                    (provenance or {}).get('fetch_timestamp', ''),
+                    (provenance or {}).get('artifact_sha256', ''),
+                    (provenance or {}).get('import_batch_id', ''),
                 ),
             )
             if cur.rowcount > 0:
@@ -207,15 +258,29 @@ def _write_summary(summary_path: str, payload: dict):
     out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 
 
-def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_fetch=True, input_file=''):
+def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_fetch=True, input_file='', source_url_override=''):
     print(f'[USDA HEMP] Starting import (dry_run={dry_run})')
     migrate_db()
 
+    import_batch_id = f"usda_hemp:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    fetch_timestamp = _utc_now_iso()
+
     if input_file:
-        rows = parse_input_file(input_file)
+        rows, artifact_bytes = parse_input_file(input_file)
         blocking_reason = None
+        source_url = source_url_override or f'file://{Path(input_file).resolve()}'
     else:
-        rows, blocking_reason = fetch_csv_rows(csv_url)
+        rows, artifact_bytes, blocking_reason = fetch_csv_rows(csv_url)
+        source_url = source_url_override or csv_url
+
+    artifact_sha256 = _sha256_bytes(artifact_bytes or b'') if artifact_bytes is not None else ''
+    provenance = {
+        'source_url': source_url,
+        'fetch_timestamp': fetch_timestamp,
+        'artifact_sha256': artifact_sha256,
+        'import_batch_id': import_batch_id,
+    }
+
     if rows is None:
         print(f'[USDA HEMP] BLOCKED: {blocking_reason}')
         print('[USDA HEMP] HINT: discover source at https://hemp.ams.usda.gov/s/PublicSearchTool')
@@ -233,6 +298,10 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'blocking_reason': blocking_reason,
             'csv_url': csv_url,
             'input_file': input_file,
+            'source_url': provenance['source_url'],
+            'fetch_timestamp': provenance['fetch_timestamp'],
+            'artifact_sha256': provenance['artifact_sha256'],
+            'import_batch_id': provenance['import_batch_id'],
         }
         _write_summary(summary_json, summary)
         return 3
@@ -256,6 +325,10 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'schema_errors': schema_errors,
             'csv_url': csv_url,
             'input_file': input_file,
+            'source_url': provenance['source_url'],
+            'fetch_timestamp': provenance['fetch_timestamp'],
+            'artifact_sha256': provenance['artifact_sha256'],
+            'import_batch_id': provenance['import_batch_id'],
         }
         _write_summary(summary_json, summary)
         return 4
@@ -284,13 +357,17 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'status': 'failed_empty_fetch',
             'csv_url': csv_url,
             'input_file': input_file,
+            'source_url': provenance['source_url'],
+            'fetch_timestamp': provenance['fetch_timestamp'],
+            'artifact_sha256': provenance['artifact_sha256'],
+            'import_batch_id': provenance['import_batch_id'],
             'schema_warnings': schema_warnings,
             'diagnostics': diagnostics,
         }
         _write_summary(summary_json, summary)
         return 2 if fail_on_empty_fetch else 0
 
-    stats = insert_records(normalized, dry_run=dry_run)
+    stats = insert_records(normalized, dry_run=dry_run, provenance=provenance)
 
     print(f'\n[USDA HEMP] Import complete (dry_run={dry_run}):')
     print(f'  ✅ New records:     {stats["new"]}')
@@ -307,7 +384,11 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
         'blocked': False,
         'status': 'ok',
         'csv_url': csv_url,
-            'input_file': input_file,
+        'input_file': input_file,
+        'source_url': provenance['source_url'],
+        'fetch_timestamp': provenance['fetch_timestamp'],
+        'artifact_sha256': provenance['artifact_sha256'],
+        'import_batch_id': provenance['import_batch_id'],
         'schema_warnings': schema_warnings,
         'diagnostics': diagnostics,
     }
@@ -321,6 +402,7 @@ if __name__ == '__main__':
     parser.add_argument('--csv-url', default=DEFAULT_CSV_URL, help='Direct USDA/export CSV URL')
     parser.add_argument('--input-file', default='', help='Manual fallback path (.csv or .json)')
     parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--source-url', default='', help='Provenance source URL override (e.g., official PDF URL/path)')
     parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when zero rows are parsed')
     args = parser.parse_args()
     raise SystemExit(main(
@@ -329,4 +411,5 @@ if __name__ == '__main__':
         summary_json=args.summary_json,
         fail_on_empty_fetch=not args.allow_empty_fetch,
         input_file=args.input_file,
+        source_url_override=args.source_url,
     ))

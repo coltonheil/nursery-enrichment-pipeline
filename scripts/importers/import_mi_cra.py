@@ -37,11 +37,15 @@ SEGMENT = 'cannabis_grower'
 BASE_URL = 'https://aca-prod.accela.com/MIMM'
 SEARCH_URL = f'{BASE_URL}/Cap/CapHome.aspx'
 
-# Accela dropdown option values for grower types
-GROWER_LICENSE_TYPES = [
-    ('Licenses/Grower License A/License/NA', 'grower_class_a'),
-    ('Licenses/Grower License B/License/NA', 'grower_class_b'),
-    ('Licenses/Grower License C/License/NA', 'grower_class_c'),
+# Accela dropdown option values for grower/cultivator types across medical + adult-use modules
+GROWER_LICENSE_QUERIES = [
+    ('Licenses', 'Licenses', 'Licenses/Grower License A/License/NA', 'grower_class_a_medical'),
+    ('Licenses', 'Licenses', 'Licenses/Grower License B/License/NA', 'grower_class_b_medical'),
+    ('Licenses', 'Licenses', 'Licenses/Grower License C/License/NA', 'grower_class_c_medical'),
+    ('Adult_Use', 'Adult_Use', 'Adult_Use/Class A Marihuana Grower/License/NA', 'grower_class_a_adult_use'),
+    ('Adult_Use', 'Adult_Use', 'Adult_Use/Class B Marihuana Grower/License/NA', 'grower_class_b_adult_use'),
+    ('Adult_Use', 'Adult_Use', 'Adult_Use/Class C Marihuana Grower/License/NA', 'grower_class_c_adult_use'),
+    ('Adult_Use', 'Adult_Use', 'Adult_Use/Excess Marihuana Grower/License/NA', 'excess_marihuana_grower_adult_use'),
 ]
 
 HEADERS = {
@@ -57,9 +61,9 @@ HEADERS = {
 }
 
 
-def get_initial_form_state(session):
+def get_initial_form_state(session, module='Licenses', tab_name='Licenses'):
     """GET the search page and extract ASP.NET form state values."""
-    params = {'module': 'Licenses', 'TabName': 'Adult-Use Establishment Licensing'}
+    params = {'module': module, 'TabName': tab_name}
     r = session.get(SEARCH_URL, params=params, timeout=30)
     r.raise_for_status()
 
@@ -75,7 +79,7 @@ def get_initial_form_state(session):
     return state, r.cookies
 
 
-def search_by_license_type(session, initial_state, license_type_value, license_type_name):
+def search_by_license_type(session, initial_state, license_type_value, license_type_name, module='Licenses', tab_name='Licenses'):
     """
     POST to search for a specific license type with Search All Records enabled.
     Returns list of records from the first page + handles pagination.
@@ -83,8 +87,15 @@ def search_by_license_type(session, initial_state, license_type_value, license_t
     records = []
     page_num = 1
     current_state = dict(initial_state)
+    next_page_target = ''
+    seen_page_signatures = set()
+    seen_license_numbers = set()
+    max_pages = 150
 
     while True:
+        if page_num > max_pages:
+            print(f'[MI CRA] Safety stop at max_pages={max_pages} for {license_type_name}')
+            break
         # Build POST payload
         payload = dict(current_state)
 
@@ -99,22 +110,21 @@ def search_by_license_type(session, initial_state, license_type_value, license_t
                 'ctl00$PlaceHolderMain$btnNewSearch': 'Search',
             })
         else:
-            # Subsequent pages — use pagination EventTarget
+            # Subsequent pages — use exact __doPostBack target parsed from pager links
             payload.update({
-                '__EVENTTARGET': f'ctl00$PlaceHolderMain$CapList$gdvPermitList',
-                '__EVENTARGUMENT': f'Page${page_num}',
+                '__EVENTTARGET': next_page_target,
+                '__EVENTARGUMENT': '',
             })
-            # Remove the search button trigger for pagination
             payload.pop('ctl00$PlaceHolderMain$btnNewSearch', None)
 
-        params = {'module': 'Licenses', 'TabName': 'Adult-Use Establishment Licensing'}
+        params = {'module': module, 'TabName': tab_name}
 
         try:
             r = session.post(
                 SEARCH_URL,
                 data=payload,
                 params=params,
-                headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                headers={**HEADERS, 'Content-Type': 'application/x-www-form-urlencoded'},
                 timeout=45,
             )
 
@@ -154,29 +164,67 @@ def search_by_license_type(session, initial_state, license_type_value, license_t
                 break
 
             page_records = parse_results_table(table, license_type_name)
+
+            # Stop on pagination loops (same page data resurfacing)
+            page_sig = tuple((r.get('license_number', ''), r.get('business_name', '')) for r in page_records[:5])
+            if page_sig and page_sig in seen_page_signatures:
+                print(f'[MI CRA] Detected repeated page signature at page {page_num}; stopping pagination for {license_type_name}.')
+                break
+            if page_sig:
+                seen_page_signatures.add(page_sig)
+
+            current_license_numbers = {
+                (r.get('license_number') or '').strip()
+                for r in page_records
+                if (r.get('license_number') or '').strip()
+            }
+            new_license_numbers = current_license_numbers - seen_license_numbers
+
+            if page_num > 1 and current_license_numbers and not new_license_numbers:
+                print(f'[MI CRA] No new license numbers on page {page_num}; stopping pagination for {license_type_name}.')
+                break
+
+            seen_license_numbers.update(current_license_numbers)
             records.extend(page_records)
 
-            print(f'[MI CRA] {license_type_name} page {page_num}: {len(page_records)} records')
+            print(
+                f'[MI CRA] {license_type_name} page {page_num}: {len(page_records)} records '
+                f'(new_license_numbers={len(new_license_numbers)})'
+            )
 
             if len(page_records) == 0:
                 break
 
-            # Check for next page link
-            pagination = soup.find('tr', class_=re.compile(r'ACA_Pagination|pager', re.I))
-            if not pagination:
-                break
+            # Check for next page link and extract exact __doPostBack target
+            table_rows = table.find_all('tr')
+            pagination = table_rows[-1] if table_rows else None
+            next_page_target = ''
+            if pagination:
+                links = pagination.find_all('a')
+                # Prefer explicit next page number within current pager chunk
+                for link in links:
+                    if link.get_text(strip=True) == str(page_num + 1):
+                        href = link.get('href', '')
+                        m = re.search(r"__doPostBack\('([^']+)'", href)
+                        if m:
+                            next_page_target = m.group(1)
+                        break
+                # Fallback for chunked pagination controls ("... Next >")
+                if not next_page_target:
+                    for link in links:
+                        label = link.get_text(' ', strip=True).lower()
+                        if 'next' in label:
+                            href = link.get('href', '')
+                            m = re.search(r"__doPostBack\('([^']+)'", href)
+                            if m:
+                                next_page_target = m.group(1)
+                            break
 
-            next_page_link = None
-            for link in (pagination.find_all('a') if pagination else []):
-                if link.get_text(strip=True) == str(page_num + 1):
-                    next_page_link = link
-                    break
-
-            if not next_page_link:
+            if not next_page_target:
                 break
 
             page_num += 1
-            time.sleep(1)  # Respect rate limits
+            time.sleep(0.5)  # Respect rate limits
 
         except requests.RequestException as e:
             print(f'[MI CRA] Request error page {page_num}: {e}')
@@ -214,11 +262,11 @@ def parse_results_table(table, license_type_name):
     # Column index mapping
     col_map = {}
     for i, h in enumerate(headers):
-        if 'license' in h and 'number' in h or 'license #' in h:
+        if ('license' in h and 'number' in h) or ('license #' in h) or ('record number' in h):
             col_map['license_number'] = i
-        elif 'license' in h and 'type' in h:
+        elif ('license' in h and 'type' in h) or ('record type' in h):
             col_map['license_type'] = i
-        elif 'business' in h and 'name' in h or 'name of business' in h:
+        elif ('business' in h and 'name' in h) or ('name of business' in h) or ('license name' in h):
             col_map['business_name'] = i
         elif 'dba' in h or 'doing business' in h:
             col_map['dba_name'] = i
@@ -256,7 +304,16 @@ def parse_results_table(table, license_type_name):
         county = get_cell('county')
         address = get_cell('address')
 
+        # Address fallback parsing for Accela result format: "..., City MI 48xxx"
+        if (not city or not zip_code) and address:
+            m = re.search(r',\s*([^,]+?)\s+MI\s+(\d{5}(?:-\d{4})?)', address)
+            if m:
+                city = city or m.group(1).strip()
+                zip_code = zip_code or m.group(2).strip()
+
         if not business_name or business_name.lower() in ('', '-', 'n/a'):
+            continue
+        if business_name.lower().startswith('download results') or business_name.lower().startswith('showing '):
             continue
 
         # Try to get the detail link for more data
@@ -354,27 +411,32 @@ def fetch_records():
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    print('[MI CRA] Fetching initial form state...')
-    try:
-        initial_state, cookies = get_initial_form_state(session)
-    except Exception as e:
-        print(f'[MI CRA] Failed to load initial form: {e}')
-        return []
-
     all_records = []
 
-    for license_type_value, license_type_name in GROWER_LICENSE_TYPES:
+    for module, tab_name, license_type_value, license_type_name in GROWER_LICENSE_QUERIES:
+        print(f'[MI CRA] Fetching initial form state for module={module} tab={tab_name}...')
+        try:
+            initial_state, _cookies = get_initial_form_state(session, module=module, tab_name=tab_name)
+        except Exception as e:
+            print(f'[MI CRA] Failed to load initial form ({module}): {e}')
+            continue
+
         print(f'[MI CRA] Searching: {license_type_name}')
         try:
             records = search_by_license_type(
-                session, initial_state, license_type_value, license_type_name
+                session,
+                initial_state,
+                license_type_value,
+                license_type_name,
+                module=module,
+                tab_name=tab_name,
             )
             print(f'[MI CRA] {license_type_name}: {len(records)} total records')
             all_records.extend(records)
         except Exception as e:
             print(f'[MI CRA] Error fetching {license_type_name}: {e}')
 
-        time.sleep(2)  # Pause between license type searches
+        time.sleep(1)
 
     return all_records
 

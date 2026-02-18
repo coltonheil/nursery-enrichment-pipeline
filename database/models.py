@@ -297,6 +297,22 @@ def migrate_db():
             FOREIGN KEY (lead_id) REFERENCES leads(id)
         )
     """)
+    # Phase 1 provenance columns (schema-safe additive)
+    cursor.execute("PRAGMA table_info(registries)")
+    registry_cols = [row[1] for row in cursor.fetchall()]
+    for col_name, col_type in [
+        ('source_url', 'TEXT'),
+        ('fetch_timestamp', 'TEXT'),
+        ('artifact_sha256', 'TEXT'),
+        ('import_batch_id', 'TEXT'),
+    ]:
+        if col_name not in registry_cols:
+            try:
+                cursor.execute(f"ALTER TABLE registries ADD COLUMN {col_name} {col_type}")
+                print(f"Added registries column: {col_name}")
+            except sqlite3.OperationalError as e:
+                print(f"Migration warning for registries.{col_name}: {e}")
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_state ON registries(state)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_segment ON registries(segment)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_promoted ON registries(promoted_at)")

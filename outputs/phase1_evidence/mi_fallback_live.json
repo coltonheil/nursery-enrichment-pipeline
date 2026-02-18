@@ -1,0 +1,15 @@
+{
+  "importer": "mi_cra",
+  "dry_run": false,
+  "fetched": 40,
+  "new": 40,
+  "existing": 0,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "input_file": "outputs/phase1_evidence/mi_official_accela_adultuse_growers.csv",
+  "diagnostics": {
+    "accepted_manual": 40,
+    "filtered_non_grower_license_type": 3
+  }
+}

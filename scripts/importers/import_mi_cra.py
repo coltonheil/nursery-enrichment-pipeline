@@ -15,6 +15,7 @@ Registry source: mi_cra
 """
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -296,6 +297,58 @@ def parse_results_table(table, license_type_name):
     return records
 
 
+def _normalize_input_row(row: dict):
+    business_name = (row.get('business_name') or row.get('name') or row.get('dba_name') or '').strip()
+    if not business_name:
+        return None, 'reject_missing_name'
+
+    license_type = (row.get('license_type') or '').strip().lower()
+    if 'grower' not in license_type:
+        return None, 'filtered_non_grower_license_type'
+
+    state = (row.get('state') or 'MI').strip().upper()
+    if state != 'MI':
+        return None, 'filtered_non_mi_state'
+
+    rec = {
+        'business_name': business_name,
+        'license_number': (row.get('license_number') or row.get('license') or '').strip(),
+        'license_type': license_type or 'grower',
+        'license_status': (row.get('status') or row.get('license_status') or 'active').strip().lower(),
+        'city': (row.get('city') or '').strip(),
+        'state': 'MI',
+        'zip': (row.get('zip') or row.get('postal_code') or '').strip(),
+        'county': (row.get('county') or '').strip(),
+        'address': (row.get('address') or '').strip(),
+        'raw_data': json.dumps(dict(row)),
+    }
+    return rec, 'accepted_manual'
+
+
+def parse_input_file(input_file: str):
+    path = Path(input_file)
+    if not path.exists():
+        raise FileNotFoundError(input_file)
+
+    if path.suffix.lower() == '.json':
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        rows = payload if isinstance(payload, list) else payload.get('rows', [])
+    elif path.suffix.lower() == '.csv':
+        with path.open('r', encoding='utf-8', newline='') as f:
+            rows = list(csv.DictReader(f))
+    else:
+        raise RuntimeError('Manual input must be .csv or .json')
+
+    records = []
+    diagnostics = {'accepted_manual': 0}
+    for row in rows:
+        rec, reason = _normalize_input_row(row)
+        diagnostics[reason] = diagnostics.get(reason, 0) + 1
+        if rec:
+            records.append(rec)
+    return records, diagnostics
+
+
 def fetch_records():
     """Fetch all grower license records from Michigan CRA Accela portal."""
     session = requests.Session()
@@ -418,12 +471,17 @@ def _write_summary(summary_path: str, payload: dict):
     out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 
 
-def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True):
+def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True, input_file=''):
     """Main import entry point."""
     print(f'[MI CRA] Starting import (dry_run={dry_run})')
     migrate_db()
 
-    records = fetch_records()
+    diagnostics = {}
+    if input_file:
+        print(f'[MI CRA] Using manual fallback input: {input_file}')
+        records, diagnostics = parse_input_file(input_file)
+    else:
+        records = fetch_records()
     fetched_count = len(records)
 
     if not records:
@@ -442,6 +500,8 @@ def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True):
             'errors': 1,
             'blocked': False,
             'status': 'failed_empty_fetch',
+            'input_file': input_file,
+            'diagnostics': diagnostics,
         }
         _write_summary(summary_json, summary)
         return 2 if fail_on_empty_fetch else 0
@@ -471,6 +531,8 @@ def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True):
         'errors': stats['errors'],
         'blocked': False,
         'status': 'ok',
+        'input_file': input_file,
+        'diagnostics': diagnostics,
     }
     _write_summary(summary_json, summary)
     return 0
@@ -480,10 +542,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import Michigan CRA cannabis grower licenses')
     parser.add_argument('--dry-run', action='store_true', help='Print stats without writing to DB')
     parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--input-file', default='', help='Manual fallback path (.csv or .json)')
     parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when fetch returns zero records')
     args = parser.parse_args()
     raise SystemExit(import_records(
         dry_run=args.dry_run,
         summary_json=args.summary_json,
         fail_on_empty_fetch=not args.allow_empty_fetch,
+        input_file=args.input_file,
     ))

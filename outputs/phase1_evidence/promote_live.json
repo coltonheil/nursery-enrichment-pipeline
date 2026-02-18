@@ -1,0 +1,12 @@
+{
+  "script": "promote_registries",
+  "dry_run": false,
+  "source_filter": "all",
+  "total_unpromoted": 4393,
+  "inserted": 3321,
+  "skipped_dup": 1072,
+  "skipped_no_name": 0,
+  "skipped_unknown_segment": 0,
+  "errors": 0,
+  "timestamp": "2026-02-18T14:03:23.270047+00:00"
+}

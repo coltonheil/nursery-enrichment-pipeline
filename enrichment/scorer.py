@@ -226,6 +226,29 @@ SCORING_RULES = {
         "description": "Worm/vermi in company name (strong affinity)"
     },
 
+    # === CANNABIS/HEMP SPECIFIC SIGNALS ===
+
+    "indoor_cannabis_cultivation": {
+        "points": 30,
+        "description": "Indoor cannabis cultivation facility"
+    },
+    "hemp_field_acreage": {
+        "points": 15,
+        "description": "Hemp producer with documented acreage (>10 acres)"
+    },
+    "cannabis_organic_cert": {
+        "points": 20,
+        "description": "Cannabis cultivator with organic/clean certification"
+    },
+    "dispensary_not_cultivator": {
+        "points": -40,
+        "description": "Dispensary only, no cultivation license"
+    },
+    "uses_cannabis_amendments": {
+        "points": 25,
+        "description": "Cannabis/hemp producer uses amendments or growing media"
+    },
+
     # === NEGATIVE SIGNALS (Disqualifiers) ===
 
     "landscaping_services": {
@@ -303,6 +326,19 @@ def check_icp_qualification(lead: dict) -> tuple:
     # Check disqualified business types
     if business_type in DISQUALIFIED_BUSINESS_TYPES:
         return False, "disqualified"
+
+    # === SEGMENT-AWARE BYPASS: cannabis and hemp ===
+    # Cannabis cultivators and hemp growers are legitimate amendment buyers —
+    # they grow in fields and apply inputs between cycles. They must not be
+    # disqualified solely because they lack nursery-style production signals.
+    segment = get_value('segment') or ""
+    if segment in ['cannabis_grower', 'hemp_producer']:
+        # Dispensary-only operations do not cultivate — disqualify them
+        if business_type == 'dispensary':
+            return False, "disqualified"
+        # Cultivators and growers pass as primary ICP
+        if business_type in ['cannabis_cultivator', 'hemp_grower']:
+            return True, "primary"
 
     # Check PRIMARY ICP signals (uses growing media)
     if get_value('uses_growing_media') == True:
@@ -445,6 +481,13 @@ def calculate_geo_score(lead: dict) -> int:
     state = normalize_state(state)
 
     if not state:
+        return 0
+
+    # Segment-aware geo override: Oregon is priority target #4 for cannabis.
+    # Neutralize the -5 freight penalty for cannabis_grower leads only.
+    # All other segments keep existing geo scoring unchanged.
+    segment = get_value('segment') or ""
+    if segment == 'cannabis_grower' and state == 'OR':
         return 0
 
     # Return geo score from tier mapping
@@ -849,6 +892,72 @@ def calculate_score(lead) -> dict:
         })
         total_score += SCORING_RULES['retail_only']['points']
 
+    # === CANNABIS/HEMP SPECIFIC SIGNALS ===
+    # These only fire for cannabis_grower and hemp_producer segments.
+    # Nursery leads are never affected.
+
+    segment = get_value('segment') or ""
+    if segment in ['cannabis_grower', 'hemp_producer']:
+
+        # Indoor cannabis cultivation: +30
+        cannabis_production = get_value('production_method') or ""
+        cultivation_type = get_value('cultivation_type') or ""
+        if cannabis_production == 'indoor' or cultivation_type == 'indoor':
+            signals.append({
+                'signal': 'indoor_cannabis_cultivation',
+                'points': SCORING_RULES['indoor_cannabis_cultivation']['points'],
+                'value': True,
+                'description': SCORING_RULES['indoor_cannabis_cultivation']['description']
+            })
+            total_score += SCORING_RULES['indoor_cannabis_cultivation']['points']
+
+        # Hemp field acreage > 10 acres: +15
+        cannabis_acreage = get_value('acreage', 0) or 0
+        if segment == 'hemp_producer' and cannabis_acreage > 10:
+            signals.append({
+                'signal': 'hemp_field_acreage',
+                'points': SCORING_RULES['hemp_field_acreage']['points'],
+                'value': cannabis_acreage,
+                'description': SCORING_RULES['hemp_field_acreage']['description']
+            })
+            total_score += SCORING_RULES['hemp_field_acreage']['points']
+
+        # Cannabis organic cert: +20
+        # Fires when is_organic_certified or an explicit cannabis_organic_cert flag is set.
+        # Stacks intentionally with the general is_organic_certified signal (+25) because
+        # organic certification in cannabis is exceptionally rare and high-value.
+        if get_value('is_organic_certified') == True or get_value('cannabis_organic_cert') == True:
+            signals.append({
+                'signal': 'cannabis_organic_cert',
+                'points': SCORING_RULES['cannabis_organic_cert']['points'],
+                'value': True,
+                'description': SCORING_RULES['cannabis_organic_cert']['description']
+            })
+            total_score += SCORING_RULES['cannabis_organic_cert']['points']
+
+        # Dispensary not cultivator: -40
+        # Dispensaries are already caught by the ICP gate, but may slip through
+        # if segment is set but business_type wasn't extracted cleanly.
+        if get_value('business_type') == 'dispensary':
+            signals.append({
+                'signal': 'dispensary_not_cultivator',
+                'points': SCORING_RULES['dispensary_not_cultivator']['points'],
+                'value': True,
+                'description': SCORING_RULES['dispensary_not_cultivator']['description']
+            })
+            total_score += SCORING_RULES['dispensary_not_cultivator']['points']
+
+        # Uses amendments or growing media: +25
+        # Confirms the lead buys soil inputs — highest buyer-intent signal for cannabis.
+        if get_value('uses_amendments') == True or get_value('uses_growing_media') == True:
+            signals.append({
+                'signal': 'uses_cannabis_amendments',
+                'points': SCORING_RULES['uses_cannabis_amendments']['points'],
+                'value': True,
+                'description': SCORING_RULES['uses_cannabis_amendments']['description']
+            })
+            total_score += SCORING_RULES['uses_cannabis_amendments']['points']
+
     # Assign tier based on score and ICP type
     tier = assign_tier(total_score, icp_type)
 
@@ -1038,6 +1147,27 @@ def test_scorer():
     print("- [X] Tier assignment: A=40+ pts, B=ICP qualified, C=disqualified")
     print("- [X] Disqualification signals enforced")
     print("- [X] State extraction from address strings")
+
+# ============================================================================
+# PUBLIC API
+# ============================================================================
+
+def score_lead(lead: dict) -> dict:
+    """
+    Public entry point for scoring a lead. Segment-aware wrapper for calculate_score().
+
+    Supports all segments: nursery, cannabis_grower, hemp_producer.
+    Reads segment from lead['segment'] automatically.
+
+    Args:
+        lead: Lead dict with business data (must include 'segment' key for
+              cannabis/hemp segment-specific scoring to apply)
+
+    Returns:
+        dict with scoring results (same as calculate_score())
+    """
+    return calculate_score(lead)
+
 
 if __name__ == '__main__':
     test_scorer()

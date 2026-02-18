@@ -22,6 +22,7 @@ import sqlite3
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
@@ -409,12 +410,21 @@ def insert_records(records, dry_run=False):
     return {'new': new_count, 'existing': existing_count, 'errors': error_count}
 
 
-def import_records(dry_run=False):
+def _write_summary(summary_path: str, payload: dict):
+    if not summary_path:
+        return
+    out = Path(summary_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+
+
+def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True):
     """Main import entry point."""
     print(f'[MI CRA] Starting import (dry_run={dry_run})')
     migrate_db()
 
     records = fetch_records()
+    fetched_count = len(records)
 
     if not records:
         print('[MI CRA] ⚠️  No records fetched.')
@@ -423,7 +433,18 @@ def import_records(dry_run=False):
         print('          - Form POST structure changed')
         print('          - Results table structure changed')
         print('          Try running manually or check portal accessibility.')
-        return
+        summary = {
+            'importer': 'mi_cra',
+            'dry_run': dry_run,
+            'fetched': fetched_count,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': False,
+            'status': 'failed_empty_fetch',
+        }
+        _write_summary(summary_json, summary)
+        return 2 if fail_on_empty_fetch else 0
 
     print(f'[MI CRA] Fetched {len(records)} grower records total')
 
@@ -441,9 +462,28 @@ def import_records(dry_run=False):
                 f'{rec["license_number"]} | {rec["license_type"]} | {rec["city"]}'
             )
 
+    summary = {
+        'importer': 'mi_cra',
+        'dry_run': dry_run,
+        'fetched': fetched_count,
+        'new': stats['new'],
+        'existing': stats['existing'],
+        'errors': stats['errors'],
+        'blocked': False,
+        'status': 'ok',
+    }
+    _write_summary(summary_json, summary)
+    return 0
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import Michigan CRA cannabis grower licenses')
     parser.add_argument('--dry-run', action='store_true', help='Print stats without writing to DB')
+    parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when fetch returns zero records')
     args = parser.parse_args()
-    import_records(dry_run=args.dry_run)
+    raise SystemExit(import_records(
+        dry_run=args.dry_run,
+        summary_json=args.summary_json,
+        fail_on_empty_fetch=not args.allow_empty_fetch,
+    ))

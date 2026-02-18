@@ -5,7 +5,7 @@ USDA hemp importer for target states: MN/WI/MI/IL/IA/IN/OH.
 Notes:
 - USDA HeMP producer-level registry is behind authenticated HeMP portal flows.
 - This importer supports direct CSV ingestion when a USDA-exported CSV is provided,
-  and documents the blocking reason when no CSV source is available.
+  and documents blocking reason when no CSV source is available.
 
 Registry source: usda_hemp
 Segment: hemp_producer
@@ -18,6 +18,7 @@ import json
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
 import requests
 
@@ -28,7 +29,6 @@ REGISTRY_SOURCE = 'usda_hemp'
 SEGMENT = 'hemp_producer'
 TARGET_STATES = {'MN', 'WI', 'MI', 'IL', 'IA', 'IN', 'OH'}
 
-# Placeholder for direct USDA-export CSV URL when available.
 DEFAULT_CSV_URL = os.environ.get('USDA_HEMP_CSV_URL', '').strip()
 
 
@@ -48,7 +48,6 @@ def fetch_csv_rows(csv_url: str):
 
 
 def normalize_row(row: dict):
-    # Flexible field mapping for various USDA export styles
     name = (row.get('producer_name') or row.get('business_name') or row.get('name') or '').strip()
     state = (row.get('state') or row.get('producer_state') or '').strip().upper()
     city = (row.get('city') or row.get('producer_city') or '').strip()
@@ -148,7 +147,15 @@ def insert_records(records, dry_run=False):
     return {'new': new_count, 'existing': existing_count, 'errors': error_count}
 
 
-def main(dry_run=False, csv_url=DEFAULT_CSV_URL):
+def _write_summary(summary_path: str, payload: dict):
+    if not summary_path:
+        return
+    out = Path(summary_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+
+
+def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_fetch=True):
     print(f'[USDA HEMP] Starting import (dry_run={dry_run})')
     migrate_db()
 
@@ -156,7 +163,20 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL):
     if rows is None:
         print(f'[USDA HEMP] BLOCKED: {blocking_reason}')
         print('[USDA HEMP] No DB writes performed.')
-        return
+        summary = {
+            'importer': 'usda_hemp',
+            'dry_run': dry_run,
+            'fetched': 0,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': True,
+            'status': 'blocked_no_source',
+            'blocking_reason': blocking_reason,
+            'csv_url': csv_url,
+        }
+        _write_summary(summary_json, summary)
+        return 3
 
     normalized = []
     for row in rows:
@@ -164,7 +184,25 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL):
         if rec:
             normalized.append(rec)
 
-    print(f'[USDA HEMP] Parsed {len(normalized)} records for target states {sorted(TARGET_STATES)}')
+    fetched_count = len(normalized)
+    print(f'[USDA HEMP] Parsed {fetched_count} records for target states {sorted(TARGET_STATES)}')
+
+    if fetched_count == 0:
+        print('[USDA HEMP] ⚠️  Zero records after normalization/filtering.')
+        summary = {
+            'importer': 'usda_hemp',
+            'dry_run': dry_run,
+            'fetched': 0,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': False,
+            'status': 'failed_empty_fetch',
+            'csv_url': csv_url,
+        }
+        _write_summary(summary_json, summary)
+        return 2 if fail_on_empty_fetch else 0
+
     stats = insert_records(normalized, dry_run=dry_run)
 
     print(f'\n[USDA HEMP] Import complete (dry_run={dry_run}):')
@@ -172,10 +210,31 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL):
     print(f'  ⏭️  Already existed: {stats["existing"]}')
     print(f'  ❌ Errors:          {stats["errors"]}')
 
+    summary = {
+        'importer': 'usda_hemp',
+        'dry_run': dry_run,
+        'fetched': fetched_count,
+        'new': stats['new'],
+        'existing': stats['existing'],
+        'errors': stats['errors'],
+        'blocked': False,
+        'status': 'ok',
+        'csv_url': csv_url,
+    }
+    _write_summary(summary_json, summary)
+    return 0
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import USDA hemp producer registry CSV for Midwest states')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--csv-url', default=DEFAULT_CSV_URL, help='Direct USDA/export CSV URL')
+    parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when zero rows are parsed')
     args = parser.parse_args()
-    main(dry_run=args.dry_run, csv_url=args.csv_url)
+    raise SystemExit(main(
+        dry_run=args.dry_run,
+        csv_url=args.csv_url,
+        summary_json=args.summary_json,
+        fail_on_empty_fetch=not args.allow_empty_fetch,
+    ))

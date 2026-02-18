@@ -2,11 +2,21 @@
 """
 Import Illinois cannabis growers (craft growers + cultivation centers) into registries.
 
-Primary source (public PDF):
+Canonical source provenance:
+  Illinois Department of Agriculture (IDOA) licensee list PDF
   https://agr.illinois.gov/content/dam/soi/en/web/agr/documents/idoa-licensee-list.pdf
+
+Registry source key remains `il_idfpr` for backward compatibility with existing rows,
+but source labeling/documentation is explicitly IDOA to remove provenance ambiguity.
 
 Registry source: il_idfpr
 Segment: cannabis_grower
+
+Provenance note:
+- Source file is published by Illinois Department of Agriculture (IDOA), but
+  registry_source remains `il_idfpr` for continuity with the roadmap/schema
+  naming used across Phase 1 artifacts and downstream queries.
+- raw_data includes source_pdf metadata for auditability.
 """
 
 import argparse
@@ -16,7 +26,7 @@ import re
 import sqlite3
 import sys
 import tempfile
-from urllib.parse import urlparse
+from pathlib import Path
 
 import pdfplumber
 import requests
@@ -26,6 +36,7 @@ from database.models import get_db_connection, migrate_db
 
 REGISTRY_SOURCE = 'il_idfpr'
 SEGMENT = 'cannabis_grower'
+SOURCE_LABEL = 'Illinois Department of Agriculture (IDOA) licensee list'
 DEFAULT_URL = 'https://agr.illinois.gov/content/dam/soi/en/web/agr/documents/idoa-licensee-list.pdf'
 
 
@@ -42,7 +53,6 @@ def _download_pdf(url: str) -> str:
 
 
 def _extract_city_state_zip(location: str):
-    # Expected formats include: "..., Springfield IL, 62711" or "..., Cary,IL 60013"
     m = re.search(r'([A-Za-z .\'-]+),?\s*IL\s*,?\s*(\d{5})?', location)
     if m:
         city = m.group(1).strip(' ,')
@@ -86,13 +96,11 @@ def parse_pdf(pdf_path: str):
                 if len(ln) < 8:
                     continue
 
-                # Split on first obvious location cue (number/address/PIN)
                 match = re.match(r'^(.*?)\s{2,}(.*)$', ln)
                 if match:
                     name = match.group(1).strip(' -')
                     location = match.group(2).strip()
                 else:
-                    # fallback: split where address starts with digit or PIN marker
                     m2 = re.match(r'^(.*?)(\b(?:PIN:|\d{1,6}\b).*)$', ln)
                     if not m2:
                         continue
@@ -110,6 +118,7 @@ def parse_pdf(pdf_path: str):
                     'location': location,
                     'section': current_section,
                     'source_pdf': os.path.basename(pdf_path),
+                    'source_label': SOURCE_LABEL,
                 }
 
                 records.append({
@@ -125,7 +134,6 @@ def parse_pdf(pdf_path: str):
                     'raw_data': json.dumps(raw),
                 })
 
-    # Deduplicate within scrape run
     deduped = {}
     for rec in records:
         key = (rec['business_name'].strip().lower(), rec['city'].strip().lower(), rec['address'].strip().lower())
@@ -196,8 +204,16 @@ def insert_records(records, dry_run=False):
     return {'new': new_count, 'existing': existing_count, 'errors': error_count}
 
 
-def main(dry_run=False, source_url=DEFAULT_URL):
-    print(f'[IL IDFPR] Starting import (dry_run={dry_run})')
+def _write_summary(summary_path: str, payload: dict):
+    if not summary_path:
+        return
+    out = Path(summary_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+
+
+def main(dry_run=False, source_url=DEFAULT_URL, summary_json='', fail_on_empty_fetch=True):
+    print(f'[IL IDOA] Starting import (dry_run={dry_run})')
     migrate_db()
     pdf_path = _download_pdf(source_url)
     try:
@@ -208,18 +224,59 @@ def main(dry_run=False, source_url=DEFAULT_URL):
         except OSError:
             pass
 
-    print(f'[IL IDFPR] Parsed {len(records)} candidate records')
+    fetched_count = len(records)
+    print(f'[IL IDOA] Parsed {fetched_count} candidate records')
+
+    if fetched_count == 0:
+        print('[IL IDOA] ⚠️  No records parsed from source PDF. Parser/source may have changed.')
+        summary = {
+            'importer': 'il_idfpr',
+            'source_label': SOURCE_LABEL,
+            'dry_run': dry_run,
+            'fetched': 0,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': False,
+            'status': 'failed_empty_fetch',
+            'source_url': source_url,
+        }
+        _write_summary(summary_json, summary)
+        return 2 if fail_on_empty_fetch else 0
+
     stats = insert_records(records, dry_run=dry_run)
 
-    print(f'\n[IL IDFPR] Import complete (dry_run={dry_run}):')
+    print(f'\n[IL IDOA] Import complete (dry_run={dry_run}):')
     print(f'  ✅ New records:     {stats["new"]}')
     print(f'  ⏭️  Already existed: {stats["existing"]}')
     print(f'  ❌ Errors:          {stats["errors"]}')
+
+    summary = {
+        'importer': 'il_idfpr',
+        'source_label': SOURCE_LABEL,
+        'dry_run': dry_run,
+        'fetched': fetched_count,
+        'new': stats['new'],
+        'existing': stats['existing'],
+        'errors': stats['errors'],
+        'blocked': False,
+        'status': 'ok',
+        'source_url': source_url,
+    }
+    _write_summary(summary_json, summary)
+    return 0
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import Illinois cannabis growers (craft + cultivation)')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--source-url', default=DEFAULT_URL)
+    parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when parse returns zero records')
     args = parser.parse_args()
-    main(dry_run=args.dry_run, source_url=args.source_url)
+    raise SystemExit(main(
+        dry_run=args.dry_run,
+        source_url=args.source_url,
+        summary_json=args.summary_json,
+        fail_on_empty_fetch=not args.allow_empty_fetch,
+    ))

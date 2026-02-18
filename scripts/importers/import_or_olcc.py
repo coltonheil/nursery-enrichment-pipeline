@@ -18,6 +18,7 @@ import sys
 import time
 import re
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
@@ -359,7 +360,15 @@ def insert_records(records, dry_run=False):
     return {'new': new_count, 'existing': existing_count, 'errors': error_count}
 
 
-def import_records(dry_run=False):
+def _write_summary(summary_path: str, payload: dict):
+    if not summary_path:
+        return
+    out = Path(summary_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+
+
+def import_records(dry_run=False, summary_json='', fail_on_empty_fetch=True):
     """Main import entry point."""
     print(f'[OR OLCC] Starting import (dry_run={dry_run})')
 
@@ -367,6 +376,7 @@ def import_records(dry_run=False):
     migrate_db()
 
     records = fetch_records()
+    fetched_count = len(records)
 
     if not records:
         print('[OR OLCC] ⚠️  No records fetched. Possible causes:')
@@ -374,7 +384,18 @@ def import_records(dry_run=False):
         print('           - CAMP eLicensing API changed')
         print('           - Network error')
         print('           Try running with browser scrape or manual CSV download.')
-        return
+        summary = {
+            'importer': 'or_olcc',
+            'dry_run': dry_run,
+            'fetched': fetched_count,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': False,
+            'status': 'failed_empty_fetch',
+        }
+        _write_summary(summary_json, summary)
+        return 2 if fail_on_empty_fetch else 0
 
     print(f'[OR OLCC] Fetched {len(records)} cultivator records')
 
@@ -389,9 +410,28 @@ def import_records(dry_run=False):
         for rec in records[:3]:
             print(f'  Sample: {rec["business_name"]} | {rec["license_number"]} | {rec["city"]}')
 
+    summary = {
+        'importer': 'or_olcc',
+        'dry_run': dry_run,
+        'fetched': fetched_count,
+        'new': stats['new'],
+        'existing': stats['existing'],
+        'errors': stats['errors'],
+        'blocked': False,
+        'status': 'ok',
+    }
+    _write_summary(summary_json, summary)
+    return 0
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import Oregon OLCC cannabis cultivator licenses')
     parser.add_argument('--dry-run', action='store_true', help='Print stats without writing to DB')
+    parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when fetch returns zero records')
     args = parser.parse_args()
-    import_records(dry_run=args.dry_run)
+    raise SystemExit(import_records(
+        dry_run=args.dry_run,
+        summary_json=args.summary_json,
+        fail_on_empty_fetch=not args.allow_empty_fetch,
+    ))

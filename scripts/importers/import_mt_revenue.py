@@ -2,12 +2,9 @@
 """
 Montana Revenue cannabis cultivator importer.
 
-Phase 1 placeholder with explicit blocking reason:
-- Montana DOR publishes license data in PDF/portal formats that vary and are often
-  non-tabular scans. No stable direct CSV/API endpoint was identified in this pass.
-
-This script supports importing from a provided PDF URL/path when available.
-If none is provided, it exits with a documented BLOCKED reason (no DB writes).
+Phase 1 importer with explicit blocker behavior and manual-source support:
+- Accepts PDF URL/path (best-effort parsing)
+- Returns clear blocked status when no source is provided
 
 Registry source: mt_revenue
 Segment: cannabis_grower
@@ -20,6 +17,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+from pathlib import Path
 
 import pdfplumber
 import requests
@@ -53,7 +51,6 @@ def parse_pdf(pdf_path: str):
         for page in pdf.pages:
             text = page.extract_text() or ''
             for ln in [x.strip() for x in text.splitlines() if x.strip()]:
-                # Best-effort parse: Name ... City, MT ZIP ... LIC####
                 m = re.search(r'^(.*?)\s+([A-Za-z .\'-]+),\s*MT\s*(\d{5})?.*?(LIC\w+|\d{4,})?$', ln)
                 if not m:
                     continue
@@ -126,15 +123,37 @@ def insert_records(records, dry_run=False):
     return {'new': new_count, 'existing': existing_count, 'errors': error_count}
 
 
-def main(dry_run=False, pdf_source=''):
+def _write_summary(summary_path: str, payload: dict):
+    if not summary_path:
+        return
+    out = Path(summary_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+
+
+def main(dry_run=False, pdf_source='', summary_json='', fail_on_empty_fetch=True):
     print(f'[MT REVENUE] Starting import (dry_run={dry_run})')
     migrate_db()
 
     if not pdf_source:
-        print('[MT REVENUE] BLOCKED: no stable public CSV/API endpoint identified and no PDF source provided.')
+        blocking_reason = 'no stable public CSV/API endpoint identified and no source file provided'
+        print(f'[MT REVENUE] BLOCKED: {blocking_reason}.')
         print('[MT REVENUE] Provide --pdf-url <url-or-path> to run best-effort parse.')
         print('[MT REVENUE] No DB writes performed.')
-        return
+        summary = {
+            'importer': 'mt_revenue',
+            'dry_run': dry_run,
+            'fetched': 0,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': True,
+            'status': 'blocked_no_source',
+            'blocking_reason': blocking_reason,
+            'pdf_source': pdf_source,
+        }
+        _write_summary(summary_json, summary)
+        return 3
 
     pdf_path = _load_pdf_path(pdf_source)
     cleanup = pdf_source.startswith('http')
@@ -144,17 +163,56 @@ def main(dry_run=False, pdf_source=''):
         if cleanup and pdf_path and os.path.exists(pdf_path):
             os.remove(pdf_path)
 
-    print(f'[MT REVENUE] Parsed {len(records)} records from PDF')
+    fetched_count = len(records)
+    print(f'[MT REVENUE] Parsed {fetched_count} records from PDF')
+
+    if fetched_count == 0:
+        print('[MT REVENUE] ⚠️  Zero records parsed from provided source.')
+        summary = {
+            'importer': 'mt_revenue',
+            'dry_run': dry_run,
+            'fetched': 0,
+            'new': 0,
+            'existing': 0,
+            'errors': 1,
+            'blocked': False,
+            'status': 'failed_empty_fetch',
+            'pdf_source': pdf_source,
+        }
+        _write_summary(summary_json, summary)
+        return 2 if fail_on_empty_fetch else 0
+
     stats = insert_records(records, dry_run=dry_run)
     print(f'\n[MT REVENUE] Import complete (dry_run={dry_run}):')
     print(f'  ✅ New records:     {stats["new"]}')
     print(f'  ⏭️  Already existed: {stats["existing"]}')
     print(f'  ❌ Errors:          {stats["errors"]}')
 
+    summary = {
+        'importer': 'mt_revenue',
+        'dry_run': dry_run,
+        'fetched': fetched_count,
+        'new': stats['new'],
+        'existing': stats['existing'],
+        'errors': stats['errors'],
+        'blocked': False,
+        'status': 'ok',
+        'pdf_source': pdf_source,
+    }
+    _write_summary(summary_json, summary)
+    return 0
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import Montana cannabis cultivators from PDF (best effort)')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--pdf-url', default='', help='PDF URL or local path')
+    parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
+    parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when parse returns zero records')
     args = parser.parse_args()
-    main(dry_run=args.dry_run, pdf_source=args.pdf_url)
+    raise SystemExit(main(
+        dry_run=args.dry_run,
+        pdf_source=args.pdf_url,
+        summary_json=args.summary_json,
+        fail_on_empty_fetch=not args.allow_empty_fetch,
+    ))

@@ -232,6 +232,10 @@ SCORING_RULES = {
         "points": 30,
         "description": "Indoor cannabis cultivation facility"
     },
+    "outdoor_licensed_cannabis": {
+        "points": 20,
+        "description": "Licensed outdoor/greenhouse cannabis cultivation"
+    },
     "hemp_field_acreage": {
         "points": 15,
         "description": "Hemp producer with documented acreage (>10 acres)"
@@ -245,7 +249,7 @@ SCORING_RULES = {
         "description": "Dispensary only, no cultivation license"
     },
     "uses_cannabis_amendments": {
-        "points": 25,
+        "points": 10,
         "description": "Cannabis/hemp producer uses amendments or growing media"
     },
 
@@ -569,6 +573,9 @@ def calculate_score(lead) -> dict:
 
     business_name = get_value('business_name') or ""
     business_type = get_value('business_type') or ""
+    segment = get_value('segment') or ""
+    is_cannabis_segment = segment == 'cannabis_grower'
+    is_hemp_segment = segment == 'hemp_producer'
 
     # Organic in business name (26% of sample requesters)
     if "organic" in business_name.lower():
@@ -665,7 +672,8 @@ def calculate_score(lead) -> dict:
         total_score += SCORING_RULES['greenhouse_production']['points']
 
     # Uses growing media (Core ICP signal)
-    if get_value('uses_growing_media') == True:
+    # Keep nursery/hemp behavior unchanged; cannabis uses segment-specific amendment scoring below.
+    if get_value('uses_growing_media') == True and not is_cannabis_segment:
         signals.append({
             'signal': 'uses_growing_media',
             'points': SCORING_RULES['uses_growing_media']['points'],
@@ -695,15 +703,17 @@ def calculate_score(lead) -> dict:
         total_score += SCORING_RULES['growers_in_name']['points']
 
     # Hemp/Cannabis (9% of sample requesters)
-    if ("hemp" in business_name.lower() or "cannabis" in business_name.lower() or
-        "hemp" in business_type.lower() or "cannabis" in business_type.lower()):
-        signals.append({
-            'signal': 'hemp_cannabis',
-            'points': SCORING_RULES['hemp_cannabis']['points'],
-            'value': True,
-            'description': SCORING_RULES['hemp_cannabis']['description']
-        })
-        total_score += SCORING_RULES['hemp_cannabis']['points']
+    # Preserve nursery scoring behavior; suppress for cannabis/hemp segments to avoid over-tiering.
+    if not (is_cannabis_segment or is_hemp_segment):
+        if ("hemp" in business_name.lower() or "cannabis" in business_name.lower() or
+            "hemp" in business_type.lower() or "cannabis" in business_type.lower()):
+            signals.append({
+                'signal': 'hemp_cannabis',
+                'points': SCORING_RULES['hemp_cannabis']['points'],
+                'value': True,
+                'description': SCORING_RULES['hemp_cannabis']['description']
+            })
+            total_score += SCORING_RULES['hemp_cannabis']['points']
 
     # === GEOGRAPHIC PROXIMITY (Phase 4) ===
     # Calculate geo score based on state proximity to Wisconsin
@@ -896,7 +906,6 @@ def calculate_score(lead) -> dict:
     # These only fire for cannabis_grower and hemp_producer segments.
     # Nursery leads are never affected.
 
-    segment = get_value('segment') or ""
     if segment in ['cannabis_grower', 'hemp_producer']:
 
         # Indoor cannabis cultivation: +30
@@ -910,6 +919,15 @@ def calculate_score(lead) -> dict:
                 'description': SCORING_RULES['indoor_cannabis_cultivation']['description']
             })
             total_score += SCORING_RULES['indoor_cannabis_cultivation']['points']
+        # Licensed outdoor/greenhouse cannabis: +20
+        elif segment == 'cannabis_grower' and business_type in ['cannabis_cultivator', 'mixed'] and cannabis_production in ['outdoor', 'greenhouse', 'mixed']:
+            signals.append({
+                'signal': 'outdoor_licensed_cannabis',
+                'points': SCORING_RULES['outdoor_licensed_cannabis']['points'],
+                'value': cannabis_production,
+                'description': SCORING_RULES['outdoor_licensed_cannabis']['description']
+            })
+            total_score += SCORING_RULES['outdoor_licensed_cannabis']['points']
 
         # Hemp field acreage > 10 acres: +15
         cannabis_acreage = get_value('acreage', 0) or 0

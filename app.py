@@ -611,7 +611,8 @@ def run_full_pipeline(batch_size):
                     website_text=lead['website_text'],
                     business_name=lead['business_name'],
                     city=lead['city'],
-                    state=lead['state']
+                    state=lead['state'],
+                    segment=lead.get('segment') or 'nursery'
                 )
 
                 if 'error' not in enriched_data:
@@ -1259,7 +1260,8 @@ def run_ai_enrichment_job(batch_size=None):
                     website_text=lead['website_text'],
                     business_name=lead['business_name'],
                     city=lead['city'],
-                    state=lead['state']
+                    state=lead['state'],
+                    segment=lead.get('segment') or 'nursery'
                 )
 
                 # Save to database

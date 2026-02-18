@@ -62,12 +62,17 @@ def get_place_details(place_id):
     """
     Get detailed information about a place.
     Returns a dictionary with phone, website, rating, etc.
+
+    Note: Google Places API (New) does not expose email addresses directly.
+    The 'places_email' field is populated via website scraping / regex extraction
+    by the email hunter, not from the Places API response.
     """
     if not GOOGLE_API_KEY:
         return {'error': 'Google API key not configured'}
 
     headers = {
         'X-Goog-Api-Key': GOOGLE_API_KEY,
+        # No 'email' field in Places API — kept for awareness
         'X-Goog-FieldMask': 'displayName,formattedAddress,internationalPhoneNumber,websiteUri,rating,userRatingCount,regularOpeningHours,googleMapsUri'
     }
 
@@ -94,6 +99,9 @@ def get_place_details(place_id):
                 if 'weekdayDescriptions' in opening_hours:
                     hours = json.dumps(opening_hours['weekdayDescriptions'])
 
+            # Google Places API does not return email fields.
+            # We set places_email=None here; the email hunter will
+            # attempt to extract it from website text and contact pages.
             return {
                 'phone': data.get('nationalPhoneNumber') or data.get('internationalPhoneNumber'),
                 'website': data.get('websiteUri'),
@@ -101,7 +109,8 @@ def get_place_details(place_id):
                 'review_count': data.get('userRatingCount'),
                 'hours': hours,
                 'google_maps_url': data.get('googleMapsUri'),
-                'place_id': place_id
+                'place_id': place_id,
+                'places_email': None,  # Reserved for future API versions that expose email
             }
         elif response.status_code == 429:
             return {'error': 'Rate limit exceeded', 'retry_after': 60}

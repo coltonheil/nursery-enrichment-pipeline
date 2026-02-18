@@ -1,0 +1,13 @@
+{
+  "running": false,
+  "overall_progress": 43,
+  "completed_steps": 2,
+  "batch_size": 100,
+  "last_lead_id": 547,
+  "last_step_completed": "scraping",
+  "saved_at": "2026-02-17T11:00:00",
+  "errors": [
+    "Lead 412: timeout"
+  ],
+  "interrupted": true
+}

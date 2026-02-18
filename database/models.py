@@ -146,7 +146,6 @@ def migrate_db():
         ('re_enriched_at', 'TIMESTAMP DEFAULT NULL'),  # When re-enrichment completed
         ('rescored_at', 'TIMESTAMP DEFAULT NULL'),  # When rescored with new model
         # Phase 10: Email Hunter columns
-        ('email_source', 'TEXT DEFAULT NULL'),  # gemini/scraped/pattern/api
         ('email_verification', 'TEXT DEFAULT NULL'),  # valid/invalid/risky/catch_all/unknown
         ('email_confidence', 'INTEGER DEFAULT NULL'),  # 0-100 confidence score
         ('email_found_at', 'TIMESTAMP DEFAULT NULL'),  # When email was discovered
@@ -170,7 +169,15 @@ def migrate_db():
         ('uses_worm_castings', 'BOOLEAN DEFAULT NULL'),  # Already uses vermicompost
         ('worm_castings_potential', 'TEXT DEFAULT NULL'),  # high/medium/low
         ('estimated_volume', 'TEXT DEFAULT NULL'),  # Small/Medium/Large/Enterprise
-        ('primary_market', 'TEXT DEFAULT NULL')  # retail/wholesale/professional/cannabis
+        ('primary_market', 'TEXT DEFAULT NULL'),  # retail/wholesale/professional/cannabis
+        # Phase 12: Email Discovery Rebuild columns
+        ('places_email', 'TEXT DEFAULT NULL'),      # Email directly from Google Places API
+        ('email_source', 'TEXT DEFAULT NULL'),      # Layer that found the email: places/website_scrape/contact_page/pattern/generic/web_search/hunter_io/snov_io
+        ('email_verified', 'BOOLEAN DEFAULT NULL'), # Whether email passed verification
+        ('email_verification_result', 'TEXT DEFAULT NULL'),  # JSON: {status, sub_status, provider, confidence}
+        ('email_hunt_attempted', 'BOOLEAN DEFAULT 0'),       # True once new system has run on this lead
+        ('contact_page_text', 'TEXT DEFAULT NULL'),          # Raw text from /contact page scrape
+        ('email_method', 'TEXT DEFAULT NULL'),               # Alias kept for backward compat (same as email_source)
     ]
 
     migrations_applied = False
@@ -237,6 +244,64 @@ def migrate_db():
     """)
     
     print("Email Hunter tables created (Phase 10)")
+
+    # Phase 0 (Registry Architecture): Add segment and registry_id to leads
+    cursor.execute("PRAGMA table_info(leads)")
+    lead_cols = [row[1] for row in cursor.fetchall()]
+
+    if 'segment' not in lead_cols:
+        try:
+            cursor.execute("ALTER TABLE leads ADD COLUMN segment TEXT DEFAULT 'nursery'")
+            print("Added column: segment")
+        except sqlite3.OperationalError as e:
+            print(f"Migration warning for segment: {e}")
+
+    if 'registry_id' not in lead_cols:
+        try:
+            cursor.execute("ALTER TABLE leads ADD COLUMN registry_id INTEGER DEFAULT NULL")
+            print("Added column: registry_id")
+        except sqlite3.OperationalError as e:
+            print(f"Migration warning for registry_id: {e}")
+
+    # Backfill: ensure all existing leads have segment = 'nursery'
+    cursor.execute("UPDATE leads SET segment = 'nursery' WHERE segment IS NULL")
+
+    # Indexes for new columns
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_segment ON leads(segment)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_registry_id ON leads(registry_id)")
+
+    # Phase 0: Create registries table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS registries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_name TEXT NOT NULL,
+            license_number TEXT,
+            license_type TEXT,
+            license_status TEXT,
+            address TEXT,
+            city TEXT,
+            state TEXT NOT NULL,
+            zip TEXT,
+            county TEXT,
+            phone TEXT,
+            website TEXT,
+            contact_name TEXT,
+            contact_email TEXT,
+            registry_source TEXT NOT NULL,
+            segment TEXT NOT NULL,
+            promoted_at TIMESTAMP,
+            lead_id INTEGER,
+            imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            raw_data TEXT,
+            UNIQUE(license_number, registry_source),
+            FOREIGN KEY (lead_id) REFERENCES leads(id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_state ON registries(state)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_segment ON registries(segment)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_promoted ON registries(promoted_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_registries_source ON registries(registry_source)")
+    print("Registries table created (Phase 0)")
 
     conn.commit()
     conn.close()
@@ -740,7 +805,7 @@ def update_lead_review(lead_id, tier_override=None, review_notes=None, reviewed_
     conn.commit()
     conn.close()
 
-def get_leads_filtered(tier=None, state=None, business_type=None, min_score=None, max_score=None, search=None, sort_by='score', sort_order='DESC', limit=50, offset=0):
+def get_leads_filtered(tier=None, state=None, business_type=None, min_score=None, max_score=None, search=None, sort_by='score', sort_order='DESC', limit=50, offset=0, segment=None):
     """
     Get leads with filters, sorting, and pagination.
 
@@ -790,6 +855,10 @@ def get_leads_filtered(tier=None, state=None, business_type=None, min_score=None
     if search:
         where_conditions.append('business_name LIKE ?')
         params.append(f'%{search}%')
+
+    if segment:
+        where_conditions.append('segment = ?')
+        params.append(segment)
 
     where_clause = ' AND '.join(where_conditions) if where_conditions else '1=1'
 
@@ -992,7 +1061,7 @@ def get_personalized_leads():
     conn.close()
     return leads
 
-def get_leads_for_export(tier_filter=None, require_email=True, require_personalization=False):
+def get_leads_for_export(tier_filter=None, require_email=True, require_personalization=False, segment=None):
     """
     Get leads ready for export with optional filters.
 
@@ -1000,6 +1069,7 @@ def get_leads_for_export(tier_filter=None, require_email=True, require_personali
         tier_filter: Filter by tier(s) - e.g., 'A', 'AB', 'ABC' or None for all
         require_email: Only include leads with email addresses (default: True)
         require_personalization: Only include leads with custom_line (default: False)
+        segment: Filter by segment (e.g., 'nursery', 'cannabis_grower') or None for all
 
     Returns:
         list: Leads ready for export
@@ -1017,13 +1087,22 @@ def get_leads_for_export(tier_filter=None, require_email=True, require_personali
         where_conditions.append(f'(COALESCE(tier_override, tier) IN ({placeholders}))')
         params.extend(tiers)
 
-    # Email requirement
+    # Email requirement — must have an email AND be verified OR high-confidence
+    # (Places/website-scrape emails ≥85 confidence skip API verification)
     if require_email:
-        where_conditions.append('(owner_email IS NOT NULL AND owner_email != "")')
+        where_conditions.append(
+            '(owner_email IS NOT NULL AND owner_email != "" '
+            'AND (email_verified = 1 OR COALESCE(email_confidence, 0) >= 85))'
+        )
 
     # Personalization requirement
     if require_personalization:
         where_conditions.append('(custom_line IS NOT NULL AND custom_line != "")')
+
+    # Segment filter
+    if segment:
+        where_conditions.append('segment = ?')
+        params.append(segment)
 
     where_clause = ' AND '.join(where_conditions) if where_conditions else '1=1'
 
@@ -1091,7 +1170,7 @@ def get_export_history(limit=10):
 
     return exports
 
-def get_export_preview_count(tier_filter=None, require_email=True, require_personalization=False):
+def get_export_preview_count(tier_filter=None, require_email=True, require_personalization=False, segment=None):
     """
     Get count of leads that would be exported with given filters.
 
@@ -1099,6 +1178,7 @@ def get_export_preview_count(tier_filter=None, require_email=True, require_perso
         tier_filter: Filter by tier(s) - e.g., 'A', 'AB', 'ABC' or None for all
         require_email: Only count leads with email addresses (default: True)
         require_personalization: Only count leads with custom_line (default: False)
+        segment: Filter by segment (e.g., 'nursery', 'cannabis_grower') or None for all
 
     Returns:
         int: Number of leads that match filters
@@ -1116,10 +1196,17 @@ def get_export_preview_count(tier_filter=None, require_email=True, require_perso
         params.extend(tiers)
 
     if require_email:
-        where_conditions.append('(owner_email IS NOT NULL AND owner_email != "")')
+        where_conditions.append(
+            '(owner_email IS NOT NULL AND owner_email != "" '
+            'AND (email_verified = 1 OR COALESCE(email_confidence, 0) >= 85))'
+        )
 
     if require_personalization:
         where_conditions.append('(custom_line IS NOT NULL AND custom_line != "")')
+
+    if segment:
+        where_conditions.append('segment = ?')
+        params.append(segment)
 
     where_clause = ' AND '.join(where_conditions) if where_conditions else '1=1'
 

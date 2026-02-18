@@ -3,7 +3,11 @@ import os
 import threading
 import time
 import json
+import logging
 from werkzeug.utils import secure_filename
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 from database.models import init_db, get_db_connection, get_all_leads, get_lead_by_id, update_enriched_data, log_action, get_leads_with_website, update_scrape_data, get_leads_for_gemini_enrichment, update_gemini_data, update_gemini_error, get_leads_for_scoring, update_lead_score, get_tier_distribution, get_leads_filtered, get_distinct_states, get_distinct_business_types, update_lead_review, bulk_update_tier, bulk_mark_reviewed, get_leads_for_personalization, update_personalization, update_personalization_error, get_personalized_leads, get_leads_for_export, log_export, get_export_history, get_export_preview_count
 from importers.excel_importer import import_excel_file, validate_excel_file
 from enrichment.google_places import enrich_business
@@ -92,6 +96,9 @@ pipeline_state = {
     'status_message': '',
     'errors': []
 }
+# Fix 3: Lock to guard pipeline_state against concurrent read/write from
+# background pipeline thread and Flask request threads (SSE, start, stop, resume).
+pipeline_lock = threading.Lock()
 
 # Phase 9: Pipeline run tracking functions
 
@@ -471,16 +478,18 @@ def run_full_pipeline(batch_size):
         run, is_resume = get_or_create_pipeline_run('full_pipeline', {'batch_size': batch_size})
         run_id = run['id']
 
-        pipeline_state['batch_size'] = batch_size
-        pipeline_state['completed_steps'] = 0
-        pipeline_state['errors'] = []
+        with pipeline_lock:
+            pipeline_state['batch_size'] = batch_size
+            pipeline_state['completed_steps'] = 0
+            pipeline_state['errors'] = []
 
         # ============================================================
         # STEP 1: Google Places Enrichment
         # ============================================================
-        pipeline_state['current_step'] = 'google_places'
-        pipeline_state['status_message'] = f'Step 1/4: Google Places enrichment ({batch_size} leads)'
-        pipeline_state['step_progress'] = 0
+        with pipeline_lock:
+            pipeline_state['current_step'] = 'google_places'
+            pipeline_state['status_message'] = f'Step 1/4: Google Places enrichment ({batch_size} leads)'
+            pipeline_state['step_progress'] = 0
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -518,17 +527,21 @@ def run_full_pipeline(batch_size):
                 log_action(lead['id'], 'enrichment_error', str(e)[:200])
                 update_enriched_data(lead['id'], {'enrichment_status': 'failed'})
 
-            pipeline_state['step_progress'] = int((idx + 1) / total_leads * 100)
-            pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / total_leads) / 4) * 100)
+            with pipeline_lock:
+                pipeline_state['step_progress'] = int((idx + 1) / total_leads * 100)
+                pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / total_leads) / 4) * 100)
 
-        pipeline_state['completed_steps'] = 1
+        with pipeline_lock:
+            pipeline_state['completed_steps'] = 1
+        _save_pipeline_state({'last_step_completed': 'google_places'})
 
         # ============================================================
         # STEP 2: Scrape Websites
         # ============================================================
-        pipeline_state['current_step'] = 'scraping'
-        pipeline_state['status_message'] = f'Step 2/4: Scraping websites'
-        pipeline_state['step_progress'] = 0
+        with pipeline_lock:
+            pipeline_state['current_step'] = 'scraping'
+            pipeline_state['status_message'] = f'Step 2/4: Scraping websites'
+            pipeline_state['step_progress'] = 0
 
         # Get the same leads that now have websites
         conn = get_db_connection()
@@ -561,17 +574,21 @@ def run_full_pipeline(batch_size):
                 update_scrape_data(lead['id'], None, 'failed', str(e)[:200])
                 log_action(lead['id'], 'scrape_failed', str(e)[:200])
 
-            pipeline_state['step_progress'] = int((idx + 1) / len(leads_to_scrape) * 100) if leads_to_scrape else 100
-            pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / max(len(leads_to_scrape), 1)) / 4) * 100)
+            with pipeline_lock:
+                pipeline_state['step_progress'] = int((idx + 1) / len(leads_to_scrape) * 100) if leads_to_scrape else 100
+                pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / max(len(leads_to_scrape), 1)) / 4) * 100)
 
-        pipeline_state['completed_steps'] = 2
+        with pipeline_lock:
+            pipeline_state['completed_steps'] = 2
+        _save_pipeline_state({'last_step_completed': 'scraping'})
 
         # ============================================================
         # STEP 3: AI Enrichment
         # ============================================================
-        pipeline_state['current_step'] = 'ai_enrichment'
-        pipeline_state['status_message'] = f'Step 3/4: AI enrichment with Gemini'
-        pipeline_state['step_progress'] = 0
+        with pipeline_lock:
+            pipeline_state['current_step'] = 'ai_enrichment'
+            pipeline_state['status_message'] = f'Step 3/4: AI enrichment with Gemini'
+            pipeline_state['step_progress'] = 0
 
         # Get leads that are scraped and ready for AI
         conn = get_db_connection()
@@ -607,24 +624,32 @@ def run_full_pipeline(batch_size):
                 update_gemini_error(lead['id'], str(e)[:200])
                 log_action(lead['id'], 'gemini_error', str(e)[:200])
 
-            pipeline_state['step_progress'] = int((idx + 1) / len(leads_to_ai_enrich) * 100) if leads_to_ai_enrich else 100
-            pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / max(len(leads_to_ai_enrich), 1)) / 4) * 100)
+            with pipeline_lock:
+                pipeline_state['step_progress'] = int((idx + 1) / len(leads_to_ai_enrich) * 100) if leads_to_ai_enrich else 100
+                pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / max(len(leads_to_ai_enrich), 1)) / 4) * 100)
 
-        pipeline_state['completed_steps'] = 3
+        with pipeline_lock:
+            pipeline_state['completed_steps'] = 3
+        _save_pipeline_state({'last_step_completed': 'ai_enrichment'})
 
         # ============================================================
         # STEP 4: Email Hunting & Scoring
         # ============================================================
-        pipeline_state['current_step'] = 'email_and_scoring'
-        pipeline_state['status_message'] = f'Step 4/4: Email hunting & scoring leads'
-        pipeline_state['step_progress'] = 0
+        with pipeline_lock:
+            pipeline_state['current_step'] = 'email_and_scoring'
+            pipeline_state['status_message'] = f'Step 4/4: Email hunting & scoring leads'
+            pipeline_state['step_progress'] = 0
 
-        # Score all the leads in the batch
+        # Fix 2 (resume): Only process leads that haven't been through email
+        # hunting yet.  This ensures idempotent resume behaviour — if the
+        # pipeline was interrupted partway through Step 4 and restarted, we
+        # skip leads that already have email_hunt_attempted = 1.
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(f'''
             SELECT * FROM leads
             WHERE id IN ({placeholders})
+              AND (email_hunt_attempted = 0 OR email_hunt_attempted IS NULL)
         ''', lead_ids)
         leads_to_score = cursor.fetchall()
         conn.close()
@@ -634,75 +659,128 @@ def run_full_pipeline(batch_size):
                 return
 
             try:
-                # Hunt for email if we have owner name and website
-                if lead.get('owner_name') and lead.get('website'):
+                # ── Email hunting ────────────────────────────────────────────
+                # CRITICAL FIX: was gated on owner_name AND website.
+                # Now runs for ANY lead with a website (or even just a domain).
+                # owner_name is optional — Layer 2 falls back to generic patterns.
+                website = lead.get('website')
+
+                # Fallback: if no website but Places gave us one, check for it
+                if not website:
+                    # Re-fetch lead in case Places enrichment just added a website
+                    conn_check = get_db_connection()
+                    cur_check = conn_check.cursor()
+                    cur_check.execute('SELECT website FROM leads WHERE id = ?', (lead['id'],))
+                    row = cur_check.fetchone()
+                    conn_check.close()
+                    if row:
+                        website = row['website']
+
+                if website:
                     try:
                         email_result = hunt_email(
-                            owner_name=lead['owner_name'],
+                            owner_name=lead.get('owner_name', '') or '',
                             business_name=lead['business_name'],
-                            website=lead['website'],
-                            enable_web_search=True,  # 3-layer fallback enabled
-                            verify_mx=True
+                            website=website,
+                            website_text=lead.get('website_text'),
+                            places_email=lead.get('places_email'),
+                            enable_web_search=True,
+                            verify_mx=True,
                         )
-                        
-                        # Update lead with email results
+
+                        # Persist results — use email_source and email_method for compatibility
                         conn = get_db_connection()
                         cursor = conn.cursor()
                         cursor.execute('''
                             UPDATE leads
-                            SET owner_email = ?,
-                                email_confidence = ?,
-                                email_method = ?,
-                                generic_email = ?,
-                                contact_form_url = ?
+                            SET owner_email               = COALESCE(?, owner_email),
+                                email_confidence          = ?,
+                                email_source              = ?,
+                                email_method              = ?,
+                                generic_email             = COALESCE(?, generic_email),
+                                contact_form_url          = COALESCE(?, contact_form_url),
+                                contact_page_text         = COALESCE(?, contact_page_text),
+                                email_verified            = ?,
+                                email_verification_result = ?,
+                                email_hunt_attempted      = 1,
+                                email_found_at            = CASE WHEN ? IS NOT NULL THEN CURRENT_TIMESTAMP ELSE email_found_at END
                             WHERE id = ?
                         ''', (
                             email_result.email,
                             email_result.confidence,
                             email_result.method,
+                            email_result.method,
                             email_result.generic_email,
                             email_result.contact_form_url,
-                            lead['id']
+                            email_result.contact_page_text,
+                            1 if email_result.verified else None,
+                            json.dumps(email_result.verification_result) if email_result.verification_result else None,
+                            email_result.email,   # for the CASE expression
+                            lead['id'],
                         ))
                         conn.commit()
                         conn.close()
-                        
+
                         if email_result.email:
-                            log_action(lead['id'], 'email_found', f"Email: {email_result.email} ({email_result.confidence}% via {email_result.method})")
+                            log_action(lead['id'], 'email_found',
+                                       f"Email: {email_result.email} "
+                                       f"({email_result.confidence}% via {email_result.method})")
                         else:
-                            log_action(lead['id'], 'email_not_found', f"No email found: {email_result.error or 'Unknown reason'}")
+                            log_action(lead['id'], 'email_not_found',
+                                       f"No email: {email_result.error or 'all layers exhausted'}")
                     except Exception as e:
+                        logger.error(f"Email hunt error for lead {lead['id']}: {e}")
                         log_action(lead['id'], 'email_error', str(e)[:200])
+                else:
+                    log_action(lead['id'], 'email_skipped', 'No website or domain available')
                 
                 # Score the lead
                 score_data = calculate_score(lead)
                 update_lead_score(lead['id'], score_data)
                 log_action(lead['id'], 'scored', f"Scored {score_data['total']} points, Tier {score_data['tier']}")
             except Exception as e:
-                log_action(lead['id'], 'score_error', str(e)[:200])
+                # Single lead failure — log and continue (don't crash the whole batch)
+                logger.error(f"Error processing lead {lead.get('id', '?')}: {e}")
+                log_action(lead['id'] if 'id' in lead.keys() else 0, 'score_error', str(e)[:200])
+                with pipeline_lock:
+                    pipeline_state['errors'].append(f"Lead {lead.get('id', '?')}: {str(e)[:80]}")
 
-            pipeline_state['step_progress'] = int((idx + 1) / len(leads_to_score) * 100)
-            pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / len(leads_to_score)) / 4) * 100)
+            with pipeline_lock:
+                pipeline_state['step_progress'] = int((idx + 1) / len(leads_to_score) * 100)
+                pipeline_state['overall_progress'] = int(((pipeline_state['completed_steps'] + (idx + 1) / len(leads_to_score)) / 4) * 100)
 
-        pipeline_state['completed_steps'] = 4
-        pipeline_state['overall_progress'] = 100
-        pipeline_state['status_message'] = f'Pipeline complete! Processed {total_leads} leads'
+            # Persist checkpoint every 10 leads so resume works
+            if (idx + 1) % 10 == 0:
+                _save_pipeline_state({'last_lead_id': lead['id']})
+
+        with pipeline_lock:
+            pipeline_state['completed_steps'] = 4
+            pipeline_state['overall_progress'] = 100
+            pipeline_state['status_message'] = f'Pipeline complete! Processed {total_leads} leads'
 
         # Phase 9: Mark pipeline run as complete
         update_pipeline_progress(run_id, total_leads, 0, None, None)
         complete_pipeline_run(run_id, 'completed')
 
+        # Save completed state (clears resume checkpoint)
+        _save_pipeline_state({'last_step_completed': 'complete', 'last_lead_id': None})
+
     except Exception as e:
-        pipeline_state['errors'].append(str(e))
-        pipeline_state['status_message'] = f'Error: {str(e)[:100]}'
+        logger.error(f"Pipeline fatal error: {e}", exc_info=True)
+        with pipeline_lock:
+            pipeline_state['errors'].append(str(e))
+            pipeline_state['status_message'] = f'Error: {str(e)[:100]}'
+        # Persist interrupted state for resume
+        _save_pipeline_state({'interrupted': True, 'error': str(e)[:200]})
         # Phase 9: Mark as failed
         try:
             complete_pipeline_run(run_id, 'failed')
-        except:
+        except Exception:
             pass
     finally:
-        pipeline_state['running'] = False
-        pipeline_state['current_step'] = None
+        with pipeline_lock:
+            pipeline_state['running'] = False
+            pipeline_state['current_step'] = None
 
 def run_google_places_job(batch_size=None):
     """Background job to enrich leads with Google Places data."""
@@ -861,14 +939,15 @@ def start_full_pipeline():
     except (ValueError, TypeError):
         return jsonify({'error': 'Invalid batch size'}), 400
 
-    # Reset state
-    pipeline_state['running'] = True
-    pipeline_state['stop_requested'] = False
-    pipeline_state['overall_progress'] = 0
-    pipeline_state['step_progress'] = 0
-    pipeline_state['completed_steps'] = 0
-    pipeline_state['current_step'] = None
-    pipeline_state['errors'] = []
+    # Reset state (under lock — background thread reads these)
+    with pipeline_lock:
+        pipeline_state['running'] = True
+        pipeline_state['stop_requested'] = False
+        pipeline_state['overall_progress'] = 0
+        pipeline_state['step_progress'] = 0
+        pipeline_state['completed_steps'] = 0
+        pipeline_state['current_step'] = None
+        pipeline_state['errors'] = []
 
     # Start background thread
     thread = threading.Thread(target=run_full_pipeline, args=(batch_size,))
@@ -881,19 +960,25 @@ def start_full_pipeline():
 def pipeline_status():
     """SSE endpoint for full pipeline progress."""
     def generate():
-        while pipeline_state['running'] or pipeline_state['overall_progress'] > 0:
-            data = {
-                'running': pipeline_state['running'],
-                'current_step': pipeline_state['current_step'],
-                'step_progress': pipeline_state['step_progress'],
-                'overall_progress': pipeline_state['overall_progress'],
-                'batch_size': pipeline_state['batch_size'],
-                'completed_steps': pipeline_state['completed_steps'],
-                'total_steps': pipeline_state['total_steps'],
-                'status_message': pipeline_state['status_message'],
-                'errors': pipeline_state['errors'][-5:]  # Last 5 errors
-            }
+        while True:
+            # Snapshot state under the lock to avoid torn reads
+            with pipeline_lock:
+                is_running = pipeline_state['running']
+                data = {
+                    'running': is_running,
+                    'current_step': pipeline_state['current_step'],
+                    'step_progress': pipeline_state['step_progress'],
+                    'overall_progress': pipeline_state['overall_progress'],
+                    'batch_size': pipeline_state['batch_size'],
+                    'completed_steps': pipeline_state['completed_steps'],
+                    'total_steps': pipeline_state['total_steps'],
+                    'status_message': pipeline_state['status_message'],
+                    'errors': pipeline_state['errors'][-5:]  # Last 5 errors
+                }
             yield f"data: {json.dumps(data)}\n\n"
+            # Stop streaming once pipeline is idle and progress has been delivered
+            if not is_running and data['overall_progress'] == 0:
+                break
             time.sleep(0.5)  # Update every 500ms
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
@@ -906,8 +991,144 @@ def stop_pipeline():
     if not pipeline_state['running']:
         return jsonify({'error': 'No pipeline job running'}), 400
 
-    pipeline_state['stop_requested'] = True
+    with pipeline_lock:
+        pipeline_state['stop_requested'] = True
+    _save_pipeline_state()
     return jsonify({'message': 'Stop requested - will finish current lead'})
+
+
+@app.route('/pipeline/health')
+def pipeline_health():
+    """
+    Health check — returns current pipeline state without starting SSE.
+    Useful for polling from external monitoring or dashboards.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Quick DB stats
+    cursor.execute("SELECT COUNT(*) as total FROM leads")
+    total_leads = cursor.fetchone()['total']
+
+    cursor.execute("SELECT COUNT(*) as c FROM leads WHERE enrichment_status = 'enriched'")
+    enriched = cursor.fetchone()['c']
+
+    cursor.execute("SELECT COUNT(*) as c FROM leads WHERE owner_email IS NOT NULL AND owner_email != ''")
+    with_email = cursor.fetchone()['c']
+
+    cursor.execute("SELECT COUNT(*) as c FROM leads WHERE email_hunt_attempted = 1")
+    hunt_attempted = cursor.fetchone()['c']
+
+    conn.close()
+
+    return jsonify({
+        'status': 'running' if pipeline_state['running'] else 'idle',
+        'pipeline': {
+            'running': pipeline_state['running'],
+            'current_step': pipeline_state['current_step'],
+            'overall_progress': pipeline_state['overall_progress'],
+            'step_progress': pipeline_state['step_progress'],
+            'completed_steps': pipeline_state['completed_steps'],
+            'status_message': pipeline_state['status_message'],
+            'errors': pipeline_state['errors'][-5:],
+        },
+        'database': {
+            'total_leads': total_leads,
+            'enriched': enriched,
+            'with_email': with_email,
+            'email_hunt_attempted': hunt_attempted,
+            'email_coverage_pct': round(with_email / max(total_leads, 1) * 100, 1),
+        },
+        'state_file': _get_state_file_path(),
+    })
+
+
+@app.route('/pipeline/resume', methods=['POST'])
+def resume_pipeline():
+    """
+    Resume an interrupted pipeline run from where it left off.
+
+    Reads pipeline_state.json and restarts from the last checkpoint.
+    If no interrupted state found, starts fresh.
+    """
+    global pipeline_state
+
+    if pipeline_state['running']:
+        return jsonify({'error': 'Pipeline already running'}), 400
+
+    saved = _load_pipeline_state()
+    if not saved:
+        return jsonify({
+            'message': 'No saved state found — use /pipeline/start to begin a fresh run',
+            'state_file': _get_state_file_path(),
+        }), 404
+
+    batch_size = saved.get('batch_size', 50)
+    last_lead_id = saved.get('last_lead_id')
+    logger.info(f"Resuming pipeline from lead_id={last_lead_id}, batch_size={batch_size}")
+
+    with pipeline_lock:
+        pipeline_state['running'] = True
+        pipeline_state['stop_requested'] = False
+        pipeline_state['overall_progress'] = saved.get('overall_progress', 0)
+        pipeline_state['completed_steps'] = saved.get('completed_steps', 0)
+        pipeline_state['batch_size'] = batch_size
+        pipeline_state['errors'] = saved.get('errors', [])
+        pipeline_state['status_message'] = 'Resumed from checkpoint'
+
+    # Start pipeline — it will detect & skip already-processed leads
+    thread = threading.Thread(target=run_full_pipeline, args=(batch_size,))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({
+        'message': f'Pipeline resumed (batch_size={batch_size}, last_lead_id={last_lead_id})',
+        'checkpoint': saved,
+    })
+
+
+# ── Pipeline state persistence helpers ─────────────────────────────────────
+
+def _get_state_file_path() -> str:
+    return os.path.join(os.path.dirname(__file__), 'data', 'pipeline_state.json')
+
+
+def _save_pipeline_state(extra: dict = None) -> None:
+    """Persist current pipeline_state to disk for crash recovery."""
+    try:
+        state = {
+            'running': False,  # Always False on disk (we're saving mid-run or on stop)
+            'overall_progress': pipeline_state.get('overall_progress', 0),
+            'step_progress': pipeline_state.get('step_progress', 0),
+            'completed_steps': pipeline_state.get('completed_steps', 0),
+            'current_step': pipeline_state.get('current_step'),
+            'batch_size': pipeline_state.get('batch_size', 0),
+            'status_message': pipeline_state.get('status_message', ''),
+            'errors': pipeline_state.get('errors', [])[-20:],
+            'saved_at': time.strftime('%Y-%m-%dT%H:%M:%S'),
+        }
+        if extra:
+            state.update(extra)
+        path = _get_state_file_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not save pipeline state: {e}")
+
+
+def _load_pipeline_state() -> dict:
+    """Load persisted pipeline state. Returns {} if not found."""
+    try:
+        path = _get_state_file_path()
+        if not os.path.exists(path):
+            return {}
+        with open(path) as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load pipeline state: {e}")
+        return {}
+
 
 def run_scraping_job():
     """Background job to scrape websites."""
@@ -1696,10 +1917,13 @@ def api_export_preview():
         require_email = request.args.get('require_email', 'true').lower() == 'true'
         require_personalization = request.args.get('require_personalization', 'false').lower() == 'true'
 
+        segment = request.args.get('segment', None)
+
         count = get_export_preview_count(
             tier_filter=tier_filter,
             require_email=require_email,
-            require_personalization=require_personalization
+            require_personalization=require_personalization,
+            segment=segment
         )
 
         return jsonify({'count': count})
@@ -1716,12 +1940,14 @@ def export_csv():
         require_email = request.form.get('require_email', 'on') == 'on'
         require_personalization = request.form.get('require_personalization', 'off') == 'on'
         include_metadata = request.form.get('include_metadata', 'on') == 'on'
+        segment = request.form.get('segment', None) or None
 
         # Get leads for export
         leads = get_leads_for_export(
             tier_filter=tier_filter,
             require_email=require_email,
-            require_personalization=require_personalization
+            require_personalization=require_personalization,
+            segment=segment
         )
 
         if not leads:
@@ -1767,12 +1993,14 @@ def export_excel():
         require_email = request.form.get('require_email', 'on') == 'on'
         require_personalization = request.form.get('require_personalization', 'off') == 'on'
         include_metadata = request.form.get('include_metadata', 'on') == 'on'
+        segment = request.form.get('segment', None) or None
 
         # Get leads for export
         leads = get_leads_for_export(
             tier_filter=tier_filter,
             require_email=require_email,
-            require_personalization=require_personalization
+            require_personalization=require_personalization,
+            segment=segment
         )
 
         if not leads:

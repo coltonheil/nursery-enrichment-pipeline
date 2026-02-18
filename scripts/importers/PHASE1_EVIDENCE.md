@@ -89,10 +89,10 @@ Scope: MI / OR / IL / USDA / MT importer hardening + verification only.
 (From `data/leads.db` post-run query)
 
 - `il_idfpr`, `cannabis_grower`, `224`
-- `mt_revenue`, `cannabis_grower`, `5`
-- `mi_cra`, `cannabis_grower`, `0`
-- `or_olcc`, `cannabis_grower`, `0`
-- `usda_hemp`, `hemp_producer`, `0`
+- `mi_cra`, `cannabis_grower`, `40`
+- `mt_revenue`, `cannabis_grower`, `286`
+- `or_olcc`, `cannabis_grower`, `1380`
+- `usda_hemp`, `hemp_producer`, `811`
 
 ## Evidence table: expected vs actual status
 
@@ -142,9 +142,64 @@ Scope: MI / OR / IL / USDA / MT importer hardening + verification only.
 - Rerun dry: `python3 scripts/importers/import_mt_revenue.py --pdf-url 'https://revenuefiles.mt.gov/files/Cannabis/Licensed-Cultivator-List.pdf' --dry-run --summary-json outputs/phase1_evidence/mt_official_rerun_dry.json`
   - result: `new=0`, `existing=327`, idempotency confirmed
 
-## Current blockers snapshot (post-E)
-- `mi_cra`: still `failed_empty_fetch` on automated Accela flow (`outputs/phase1_evidence/mi_dry_latest.json`).
-- `usda_hemp`: still `blocked_no_source` until an official/public CSV export URL is provided (`outputs/phase1_evidence/usda_dry_latest.json`).
+## Checkpoint F — MT hygiene hotfix + cleanup (2026-02-18)
+
+### Importer hardening
+- `import_mt_revenue.py`
+  - Added strict noise reject patterns for MT header/footer contamination (e.g., `informational purposes`, `page X of Y`, `revenue.mt.gov`, `montana relay`, governor/director/header strings).
+  - Added explicit validator guard before insert (`validate_record`) and validator diagnostics.
+  - Insert summary now includes `rejected` count.
+
+### One-time cleanup
+- Added: `scripts/importers/cleanup_mt_revenue_noise.sql`
+- Run: `sqlite3 data/leads.db < scripts/importers/cleanup_mt_revenue_noise.sql`
+- Result: `deleted_rows=13` legacy noise rows removed.
+
+### MT reruns after cleanup/hotfix
+- Dry: `outputs/phase1_evidence/mt_hotfix_dry.json` → `fetched=327`, `new=12`, `existing=315`, `rejected=0`
+- Live: `outputs/phase1_evidence/mt_hotfix_live.json` → `new=12`, `existing=315`, `rejected=0`
+- Rerun dry: `outputs/phase1_evidence/mt_hotfix_rerun_dry.json` → `new=0`, `existing=327` (idempotent)
+
+## Checkpoint G — MI fallback unblock (2026-02-18)
+
+### Tavily-first discovery
+- Query used: `Michigan CRA grower license csv` / `site:michigan.gov CRA licensing statistical reports downloadable csv`
+- Official public source used for artifact extraction:
+  - `https://aca-prod.accela.com/MIMM/Cap/CapHome.aspx?module=Adult_Use&TabName=Adult_Use`
+  - (Public CRA verify flow instructions page: `https://www.michigan.gov/cra/verify-a-license-1`)
+
+### Importer change
+- `import_mi_cra.py`
+  - Added manual fallback mode: `--input-file <csv|json>`
+  - Added normalization/diagnostics for fallback ingest while retaining existing Accela flow as default path.
+
+### Official artifact + fallback runs
+- Artifact: `outputs/phase1_evidence/mi_official_accela_adultuse_growers.csv`
+- Dry: `outputs/phase1_evidence/mi_fallback_dry.json` → `fetched=40`, `new=40`, `existing=0`
+- Live: `outputs/phase1_evidence/mi_fallback_live.json` → `new=40`, `existing=0`
+- Rerun dry: `outputs/phase1_evidence/mi_fallback_rerun_dry.json` → `new=0`, `existing=40` (idempotent)
+
+## Checkpoint H — USDA unblock via approved exported artifact (2026-02-18)
+
+### Tavily-first discovery
+- Query used: `USDA hemp producer csv public`
+- Official/public source pinned:
+  - FOIA public licensee source PDF: `https://www.ams.usda.gov/sites/default/files/media/FOIAUSDAHempLicensees.pdf`
+- Approved exported CSV artifact produced from that official source:
+  - `outputs/phase1_evidence/usda_foia_export_midwest.csv`
+
+### Importer change
+- `import_usda_hemp.py`
+  - Added manual fallback mode: `--input-file <csv|json>` (keeps existing schema checks intact).
+
+### USDA runs (target states MN/WI/MI/IL/IA/IN/OH)
+- Dry: `outputs/phase1_evidence/usda_fallback_dry.json` → `fetched=811`, `new=811`, `existing=0`
+- Live: `outputs/phase1_evidence/usda_fallback_live.json` → `new=811`, `existing=0`
+- Rerun dry: `outputs/phase1_evidence/usda_fallback_rerun_dry.json` → `new=0`, `existing=811` (idempotent)
+
+## Current blockers snapshot (post-H)
+- `mi_cra` automated Accela POST path still intermittently fragile, but fallback ingestion is now unblocked and evidenced.
+- `usda_hemp` no longer blocked when using approved exported artifact fallback.
 
 ## Data quality checks
 (Null `business_name`, null `state`, and `promoted_at` null by source)

@@ -1,0 +1,18 @@
+{
+  "importer": "usda_hemp",
+  "dry_run": false,
+  "fetched": 811,
+  "new": 811,
+  "existing": 0,
+  "errors": 0,
+  "blocked": false,
+  "status": "ok",
+  "csv_url": "",
+  "input_file": "outputs/phase1_evidence/usda_foia_export_midwest.csv",
+  "schema_warnings": [
+    "Missing optional columns: ['registration_number', 'license_status', 'county', 'postal_code']"
+  ],
+  "diagnostics": {
+    "accepted": 811
+  }
+}

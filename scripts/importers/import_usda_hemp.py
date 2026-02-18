@@ -84,6 +84,19 @@ def fetch_csv_rows(csv_url: str):
     return list(reader), None
 
 
+def parse_input_file(input_file: str):
+    path = Path(input_file)
+    if not path.exists():
+        raise FileNotFoundError(input_file)
+    if path.suffix.lower() == '.json':
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        return payload if isinstance(payload, list) else payload.get('rows', [])
+    if path.suffix.lower() == '.csv':
+        with path.open('r', encoding='utf-8', newline='') as f:
+            return list(csv.DictReader(f))
+    raise RuntimeError('Manual input must be .csv or .json')
+
+
 def normalize_row(row: dict):
     name = (row.get('producer_name') or row.get('business_name') or row.get('name') or '').strip()
     state = (row.get('state') or row.get('producer_state') or '').strip().upper()
@@ -194,11 +207,15 @@ def _write_summary(summary_path: str, payload: dict):
     out.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 
 
-def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_fetch=True):
+def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_fetch=True, input_file=''):
     print(f'[USDA HEMP] Starting import (dry_run={dry_run})')
     migrate_db()
 
-    rows, blocking_reason = fetch_csv_rows(csv_url)
+    if input_file:
+        rows = parse_input_file(input_file)
+        blocking_reason = None
+    else:
+        rows, blocking_reason = fetch_csv_rows(csv_url)
     if rows is None:
         print(f'[USDA HEMP] BLOCKED: {blocking_reason}')
         print('[USDA HEMP] HINT: discover source at https://hemp.ams.usda.gov/s/PublicSearchTool')
@@ -215,6 +232,7 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'status': 'blocked_no_source',
             'blocking_reason': blocking_reason,
             'csv_url': csv_url,
+            'input_file': input_file,
         }
         _write_summary(summary_json, summary)
         return 3
@@ -237,6 +255,7 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'schema_warnings': schema_warnings,
             'schema_errors': schema_errors,
             'csv_url': csv_url,
+            'input_file': input_file,
         }
         _write_summary(summary_json, summary)
         return 4
@@ -264,6 +283,7 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
             'blocked': False,
             'status': 'failed_empty_fetch',
             'csv_url': csv_url,
+            'input_file': input_file,
             'schema_warnings': schema_warnings,
             'diagnostics': diagnostics,
         }
@@ -287,6 +307,7 @@ def main(dry_run=False, csv_url=DEFAULT_CSV_URL, summary_json='', fail_on_empty_
         'blocked': False,
         'status': 'ok',
         'csv_url': csv_url,
+            'input_file': input_file,
         'schema_warnings': schema_warnings,
         'diagnostics': diagnostics,
     }
@@ -298,6 +319,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Import USDA hemp producer registry CSV for Midwest states')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--csv-url', default=DEFAULT_CSV_URL, help='Direct USDA/export CSV URL')
+    parser.add_argument('--input-file', default='', help='Manual fallback path (.csv or .json)')
     parser.add_argument('--summary-json', '--json', dest='summary_json', default='', help='Write machine-readable run summary JSON')
     parser.add_argument('--allow-empty-fetch', action='store_true', help='Do not exit non-zero when zero rows are parsed')
     args = parser.parse_args()
@@ -306,4 +328,5 @@ if __name__ == '__main__':
         csv_url=args.csv_url,
         summary_json=args.summary_json,
         fail_on_empty_fetch=not args.allow_empty_fetch,
+        input_file=args.input_file,
     ))

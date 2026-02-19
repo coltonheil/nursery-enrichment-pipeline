@@ -73,6 +73,7 @@ from enrichment.gemini_client      import enrich_lead_with_gemini
 from enrichment.scorer             import score_lead
 from enrichment.email_hunter       import hunt_email
 from enrichment.email_verifier_api import verify_email
+from enrichment.enrichment_router  import enrich_lead_facebook_fallback
 from database.models               import (
     get_db_connection,
     update_enriched_data,
@@ -530,6 +531,126 @@ def run_stage5_email_hunt(segment: str, tier: Optional[str], limit: int) -> Tupl
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# STAGE 5b: Facebook Fallback Email Discovery (Hemp/Cannabis only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_stage5b_facebook_fallback(segment: str, tier: Optional[str], limit: int) -> Tuple[int, int]:
+    """
+    Fallback email discovery via Facebook for hemp/cannabis leads with no email.
+
+    Runs AFTER Stage 5 (email hunting). Targets:
+      - Segment is hemp_producer or cannabis_grower (or generic hemp/cannabis)
+      - email_hunt_attempted = 1 (already tried normal hunting)
+      - owner_email IS NULL (still no email found)
+      - facebook_fallback_attempted IS NULL (not already tried this path)
+
+    On success: writes owner_email, email_source='facebook_page', and facebook_url.
+    """
+    # Only applies to hemp/cannabis — skip entirely for nursery
+    if segment not in ('hemp_producer', 'cannabis_grower', 'hemp', 'cannabis', 'all'):
+        log("Stage 5b: not a hemp/cannabis run — skipping Facebook fallback")
+        return 0, 0
+
+    # Ensure the tracker column exists (idempotent migration)
+    conn = _db()
+    cur  = conn.cursor()
+    cur.execute("PRAGMA table_info(leads)")
+    existing_cols = {row[1] for row in cur.fetchall()}
+    if 'facebook_fallback_attempted' not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN facebook_fallback_attempted BOOLEAN DEFAULT NULL")
+        log("Stage 5b: added column facebook_fallback_attempted")
+    if 'facebook_url' not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN facebook_url TEXT DEFAULT NULL")
+        log("Stage 5b: added column facebook_url")
+    conn.commit()
+    conn.close()
+
+    # Build segment filter — if 'all', include all hemp/cannabis variants
+    hemp_segs = ('hemp_producer', 'cannabis_grower', 'hemp', 'cannabis')
+    if segment == 'all':
+        seg_in  = ', '.join('?' * len(hemp_segs))
+        seg_params = list(hemp_segs)
+        seg_sql = f"AND segment IN ({seg_in})"
+    else:
+        seg_sql    = "AND segment = ?"
+        seg_params = [segment]
+
+    tier_sql, tier_params = _tier_clause(tier)
+
+    sql = f"""
+        SELECT id, business_name, city, state, segment
+        FROM leads
+        WHERE owner_email IS NULL
+          AND (email_hunt_attempted = 1 OR email_hunt_attempted IS NOT NULL)
+          AND facebook_fallback_attempted IS NULL
+          {seg_sql}
+          {tier_sql}
+        ORDER BY {_tier_order_expr()}
+        LIMIT ?
+    """
+    leads = _query(sql, seg_params + tier_params + [limit])
+
+    if not leads:
+        log("Stage 5b: no hemp/cannabis leads need Facebook fallback — all done or emails already found")
+        return 0, 0
+
+    log(f"Stage 5b: {len(leads)} hemp/cannabis leads to try Facebook fallback")
+    ok = failed = 0
+    now = datetime.now().isoformat()
+
+    for i, lead in enumerate(leads, 1):
+        lead_id = lead["id"]
+        try:
+            result = enrich_lead_facebook_fallback(lead)
+
+            conn = _db()
+            cur  = conn.cursor()
+
+            if result and result.get('email'):
+                email    = result['email']
+                fb_url   = result.get('facebook_url', '')
+                ok += 1
+                log(f"  [{i}] ✓ {lead['business_name']} — {email} (facebook_page, {fb_url})")
+                cur.execute("""
+                    UPDATE leads SET
+                        owner_email                  = COALESCE(owner_email, ?),
+                        contact_email                = COALESCE(contact_email, ?),
+                        email_source                 = ?,
+                        email_method                 = ?,
+                        email_found_at               = ?,
+                        facebook_url                 = COALESCE(facebook_url, ?),
+                        facebook_fallback_attempted  = 1
+                    WHERE id = ?
+                """, [email, email, 'facebook_page', 'facebook_page', now, fb_url, lead_id])
+            else:
+                failed += 1
+                log(f"  [{i}] – {lead['business_name']} — no email on Facebook", "WARN")
+                cur.execute(
+                    "UPDATE leads SET facebook_fallback_attempted = 1 WHERE id = ?",
+                    [lead_id],
+                )
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            _exec_sql(
+                "UPDATE leads SET facebook_fallback_attempted = 1 WHERE id = ?",
+                [lead_id],
+            )
+            log(f"  [{i}] ✗ {lead['business_name']} — {e}", "WARN")
+            failed += 1
+
+        # Tavily rate limit buffer
+        time.sleep(0.5)
+
+        if i % PROGRESS_INT == 0:
+            _progress(5, "Facebook Fallback", i, ok, failed)
+
+    return ok, failed
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # STAGE 6: Reoon Email Verification
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -682,13 +803,14 @@ def _print_summary(segment: str, stage_results: Dict[int, Tuple[int, int]]) -> N
     print(f"{'='*60}", flush=True)
 
     STAGE_NAMES = {
-        1: "Google Places",
-        2: "Web Scraping",
-        3: "Gemini Enrichment",
-        4: "Scoring",
-        5: "Email Hunting",
-        6: "Reoon Verification",
-        7: "Supabase Sync",
+        1:  "Google Places",
+        2:  "Web Scraping",
+        3:  "Gemini Enrichment",
+        4:  "Scoring",
+        5:  "Email Hunting",
+        51: "Facebook Fallback (5b)",
+        6:  "Reoon Verification",
+        7:  "Supabase Sync",
     }
     print("\nStage results (this run):", flush=True)
     for st, (ok, fail) in sorted(stage_results.items()):
@@ -812,6 +934,13 @@ def main() -> int:
         ok, fail = run_stage5_email_hunt(args.segment, args.tier, limit)
         stage_results[5] = (ok, fail)
         log(f"Stage 5 complete: {ok} found email, {fail} no email found")
+
+    # ── Stage 5b: Facebook Fallback (hemp/cannabis only) ─────────────────────
+    if args.stage <= 6:   # run whenever Stage 6 would run (both are post-email-hunt)
+        _banner(5, "Facebook Fallback — Hemp/Cannabis Email Discovery (5b)")
+        ok, fail = run_stage5b_facebook_fallback(args.segment, args.tier, limit)
+        stage_results[51] = (ok, fail)   # key 51 = "5b"
+        log(f"Stage 5b complete: {ok} found email via Facebook, {fail} no luck")
 
     # ── Stage 6: Reoon Verification ───────────────────────────────────────────
     if args.stage <= 6:

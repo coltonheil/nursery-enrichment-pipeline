@@ -781,6 +781,8 @@ def run_stage7_sync(segment: str, dry_run: bool) -> Tuple[int, int]:
     cmd = [sys.executable, str(script)]
     if dry_run:
         cmd.append("--dry-run")
+    if segment:
+        cmd.extend(["--segment", segment])
 
     log(f"Stage 7: calling {script.name}" + (" (dry-run)" if dry_run else ""))
     try:

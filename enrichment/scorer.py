@@ -578,8 +578,8 @@ def calculate_score(lead) -> dict:
     business_name = get_value('business_name') or ""
     business_type = get_value('business_type') or ""
     segment = get_value('segment') or ""
-    is_cannabis_segment = segment == 'cannabis_grower'
-    is_hemp_segment = segment == 'hemp_producer'
+    is_cannabis_segment = segment in ['cannabis_grower', 'cannabis']
+    is_hemp_segment = segment in ['hemp', 'hemp_producer']
 
     # Organic in business name (26% of sample requesters)
     if "organic" in business_name.lower():
@@ -910,7 +910,7 @@ def calculate_score(lead) -> dict:
     # These only fire for cannabis_grower and hemp_producer segments.
     # Nursery leads are never affected.
 
-    if segment in ['cannabis_grower', 'hemp_producer']:
+    if is_cannabis_segment or is_hemp_segment:
 
         # Indoor cannabis cultivation: +30
         cannabis_production = get_value('production_method') or ""
@@ -935,7 +935,7 @@ def calculate_score(lead) -> dict:
 
         # Hemp field acreage > 10 acres: +15
         cannabis_acreage = get_value('acreage', 0) or 0
-        if segment == 'hemp_producer' and cannabis_acreage > 10:
+        if is_hemp_segment and cannabis_acreage > 10:
             signals.append({
                 'signal': 'hemp_field_acreage',
                 'points': SCORING_RULES['hemp_field_acreage']['points'],

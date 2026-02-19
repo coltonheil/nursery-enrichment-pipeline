@@ -63,7 +63,7 @@ def supabase_headers(service_role_key: str) -> dict:
         "apikey": service_role_key,
         "Authorization": f"Bearer {service_role_key}",
         "Content-Type": "application/json",
-        "Prefer": "resolution=ignore-duplicates,return=minimal",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
     }
 
 
@@ -142,14 +142,22 @@ def batch_insert(
 # ---------------------------------------------------------------------------
 # SQLite query
 # ---------------------------------------------------------------------------
-def load_leads(db_path: Path) -> list[dict]:
-    """Load qualifying leads from SQLite."""
+SEGMENT_ALIASES: dict[str, tuple[str, ...]] = {
+    "hemp_producer":   ("hemp", "hemp_producer"),
+    "cannabis_grower": ("cannabis", "cannabis_grower"),
+}
+
+
+def load_leads(db_path: Path, segment: str | None = None) -> list[dict]:
+    """Load qualifying leads from SQLite, optionally filtered by segment.
+
+    Handles aliases: 'hemp_producer' matches both 'hemp' and 'hemp_producer' in DB.
+    """
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    cur.execute(
-        """
+    base_query = """
         SELECT
             business_name,
             owner_name,
@@ -162,7 +170,15 @@ def load_leads(db_path: Path) -> list[dict]:
             tier,
             tier_override,
             segment,
-            registry_id
+            registry_id,
+            business_type,
+            production_method,
+            is_organic_certified,
+            organic_focus,
+            acreage,
+            personalization_status,
+            custom_line,
+            email_angle
         FROM leads
         WHERE (
             (tier_override IS NOT NULL AND tier_override IN ('A', 'B'))
@@ -170,9 +186,20 @@ def load_leads(db_path: Path) -> list[dict]:
         )
         AND owner_email IS NOT NULL
         AND owner_email != ''
-        ORDER BY score DESC
-        """
-    )
+    """
+    params: list = []
+    if segment and segment != "all":
+        aliases = SEGMENT_ALIASES.get(segment)
+        if aliases:
+            placeholders = ", ".join("?" * len(aliases))
+            base_query += f" AND segment IN ({placeholders})"
+            params.extend(aliases)
+        else:
+            base_query += " AND segment = ?"
+            params.append(segment)
+    base_query += " ORDER BY score DESC"
+
+    cur.execute(base_query, params)
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
     return rows
@@ -186,7 +213,7 @@ def map_row(lead: dict) -> dict:
     effective_tier = lead.get("tier_override") or lead.get("tier") or ""
     score = lead.get("score") or 0
 
-    return {
+    row: dict = {
         "company_name": lead.get("business_name") or "",
         "contact_name": lead.get("owner_name") or "",
         "phone": lead.get("phone") or "",
@@ -194,12 +221,29 @@ def map_row(lead: dict) -> dict:
         "city": lead.get("city") or "",
         "state": lead.get("state") or "",
         "zip": lead.get("zip") or "",
-        "status": "new",
+        "status": "prospect",
         "notes": f"Score: {score}, Tier: {effective_tier}",
         "source": "pipeline_sync",
         "enrichment_tier": effective_tier,
         "segment": lead.get("segment") or "nursery",
+        # Enrichment fields — Gemini/pipeline data
+        "business_type": lead.get("business_type") or None,
+        "production_method": lead.get("production_method") or None,
+        "is_organic_certified": lead.get("is_organic_certified"),
+        "organic_focus": lead.get("organic_focus"),
+        "acreage": lead.get("acreage") or None,
+        # custom_line = Gemini personalization notes; email_angle = unique outreach hook
+        "personalization_notes": lead.get("custom_line") or None,
+        "unique_hook": lead.get("email_angle") or None,
     }
+
+    # SQLite stores booleans as 0/1 integers — convert to Python bool for JSON
+    for bool_field in ("is_organic_certified", "organic_focus"):
+        val = row[bool_field]
+        if isinstance(val, int):
+            row[bool_field] = bool(val)
+
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +257,11 @@ def main() -> None:
         "--dry-run",
         action="store_true",
         help="Preview what would sync without writing to Supabase",
+    )
+    parser.add_argument(
+        "--segment",
+        default=None,
+        help="Filter to a specific segment (e.g. hemp, nursery, cannabis_grower)",
     )
     args = parser.parse_args()
 
@@ -231,53 +280,41 @@ def main() -> None:
         print("[error] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.")
         sys.exit(1)
 
-    print(f"{'[DRY RUN] ' if args.dry_run else ''}sync_to_supabase starting at {datetime.now():%Y-%m-%d %H:%M:%S}")
+    seg_label = f" [segment={args.segment}]" if args.segment else " [all segments]"
+    print(f"{'[DRY RUN] ' if args.dry_run else ''}sync_to_supabase starting at {datetime.now():%Y-%m-%d %H:%M:%S}{seg_label}")
     print(f"  Source DB : {DB_PATH}")
     print(f"  Target    : {supabase_url}/rest/v1/prospects")
 
     # Load leads
-    leads = load_leads(DB_PATH)
+    leads = load_leads(DB_PATH, segment=args.segment)
     print(f"\n  Qualifying leads in SQLite : {len(leads)}")
 
     if not leads:
         print("  Nothing to sync.")
         return
 
-    # Fetch existing emails from Supabase (skip on dry-run for speed)
-    if args.dry_run:
-        existing_emails: set = set()
-        print("  [dry-run] Skipping existing-email fetch from Supabase")
-    else:
-        print("  Fetching existing emails from Supabase…", end=" ", flush=True)
-        existing_emails = fetch_existing_emails(supabase_url, service_key)
-        print(f"{len(existing_emails)} found")
-
-    # Partition leads
-    to_insert = []
-    already_existed = 0
-
+    # Build upsert list (all qualifying leads — merge-duplicates handles existing records)
+    seen_emails: set = set()
+    to_upsert = []
     for lead in leads:
         email = (lead.get("owner_email") or "").strip().lower()
-        if not email:
+        if not email or email in seen_emails:
             continue
-        if email in existing_emails:
-            already_existed += 1
-            continue
-        to_insert.append(map_row(lead))
-        # Add to set so same email doesn't get inserted twice in one run
-        existing_emails.add(email)
+        seen_emails.add(email)
+        to_upsert.append(map_row(lead))
 
-    print(f"  New leads to sync         : {len(to_insert)}")
-    print(f"  Already in Supabase       : {already_existed}")
+    print(f"  Leads to upsert           : {len(to_upsert)}")
 
-    if args.dry_run and to_insert:
+    if args.dry_run and to_upsert:
         print("\n  [dry-run] Sample rows (first 3):")
-        for row in to_insert[:3]:
-            print(f"    • {row['email']} | {row['company_name']} | Tier {row['enrichment_tier']} | {row['notes']}")
+        for row in to_upsert[:3]:
+            print(f"    • {row['email']} | {row['company_name']} | Tier {row['enrichment_tier']} | biz={row.get('business_type')} | prod={row.get('production_method')}")
 
-    if not to_insert:
-        print(f"\nSynced 0 new leads, {already_existed} already existed, 0 errors")
+    if not to_upsert:
+        print("\nSynced 0 leads, 0 errors")
         return
+
+    to_insert = to_upsert  # alias for loop below
 
     # Batch insert
     total_synced = 0
@@ -300,8 +337,7 @@ def main() -> None:
             print(status)
 
     print(
-        f"\nSynced {total_synced} new leads, "
-        f"{already_existed} already existed, "
+        f"\nSynced {total_synced} leads (upserted), "
         f"{total_errors} errors"
     )
 

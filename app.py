@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 from database.models import init_db, get_db_connection, get_all_leads, get_lead_by_id, update_enriched_data, log_action, get_leads_with_website, update_scrape_data, get_leads_for_gemini_enrichment, update_gemini_data, update_gemini_error, get_leads_for_scoring, update_lead_score, get_tier_distribution, get_leads_filtered, get_distinct_states, get_distinct_business_types, update_lead_review, bulk_update_tier, bulk_mark_reviewed, get_leads_for_personalization, update_personalization, update_personalization_error, get_personalized_leads, get_leads_for_export, log_export, get_export_history, get_export_preview_count
 from importers.excel_importer import import_excel_file, validate_excel_file
 from enrichment.google_places import enrich_business
+from enrichment.enrichment_router import enrich_lead_step1
 from enrichment.web_scraper import scrape_and_extract
 from enrichment.gemini_client import enrich_lead_with_gemini, generate_personalization
 from enrichment.scorer import calculate_score, calculate_geo_score
@@ -381,12 +382,8 @@ def enrich_lead(lead_id):
         if not lead:
             return jsonify({'error': 'Lead not found'}), 404
 
-        # Call Google Places API
-        enriched_data = enrich_business(
-            lead['business_name'],
-            lead['city'],
-            lead['state']
-        )
+        # Step 1 enrichment — routes to web search for hemp/cannabis, Places for nursery
+        enriched_data = enrich_lead_step1(dict(lead))
 
         # Check for errors
         if 'error' in enriched_data:
@@ -442,12 +439,8 @@ def enrich_batch():
                 results['errors'].append(f"Lead {lead_id} not found")
                 continue
 
-            # Enrich the lead
-            enriched_data = enrich_business(
-                lead['business_name'],
-                lead['city'],
-                lead['state']
-            )
+            # Enrich the lead — routes by segment (web search for hemp/cannabis)
+            enriched_data = enrich_lead_step1(dict(lead))
 
             if 'error' in enriched_data:
                 log_action(lead_id, 'enrichment_failed', enriched_data['error'])
@@ -515,11 +508,11 @@ def run_full_pipeline(batch_size):
                 return
 
             try:
-                enriched_data = enrich_business(lead['business_name'], lead['city'], lead['state'])
+                enriched_data = enrich_lead_step1(dict(lead))
                 if 'error' not in enriched_data:
                     enriched_data['enrichment_status'] = 'enriched'
                     update_enriched_data(lead['id'], enriched_data)
-                    log_action(lead['id'], 'enriched', "Enriched with Google Places data")
+                    log_action(lead['id'], 'enriched', f"Enriched via {enriched_data.get('enrichment_source', 'unknown')}")
                 else:
                     log_action(lead['id'], 'enrichment_failed', enriched_data['error'])
                     update_enriched_data(lead['id'], {'enrichment_status': 'failed'})
@@ -603,6 +596,9 @@ def run_full_pipeline(batch_size):
         conn.close()
 
         for idx, lead in enumerate(leads_to_ai_enrich):
+            # Convert sqlite3.Row to dict so .get() works
+            lead = dict(lead)
+
             if pipeline_state['stop_requested']:
                 return
 
@@ -818,12 +814,8 @@ def run_google_places_job(batch_size=None):
             google_places_state['current_lead'] = lead['business_name']
 
             try:
-                # Call Google Places API
-                enriched_data = enrich_business(
-                    lead['business_name'],
-                    lead['city'],
-                    lead['state']
-                )
+                # Step 1 enrichment — routes by segment (web search for hemp/cannabis)
+                enriched_data = enrich_lead_step1(dict(lead))
 
                 if 'error' in enriched_data:
                     # Log the failure
@@ -835,7 +827,7 @@ def run_google_places_job(batch_size=None):
                     # Update the lead with enriched data
                     enriched_data['enrichment_status'] = 'enriched'
                     update_enriched_data(lead['id'], enriched_data)
-                    log_action(lead['id'], 'enriched', "Enriched with Google Places data")
+                    log_action(lead['id'], 'enriched', f"Enriched via {enriched_data.get('enrichment_source', 'unknown')}")
                     google_places_state['completed'] += 1
 
             except Exception as e:
@@ -1248,6 +1240,9 @@ def run_ai_enrichment_job(batch_size=None):
         ai_enrichment_state['errors'] = []
 
         for lead in leads_to_enrich:
+            # Convert sqlite3.Row to dict so .get() works
+            lead = dict(lead)
+
             # Check if stop was requested
             if ai_enrichment_state['stop_requested']:
                 break

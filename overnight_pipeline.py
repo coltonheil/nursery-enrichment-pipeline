@@ -68,6 +68,7 @@ _load_env_file(PROJECT_ENV)   # project .env fills remaining gaps
 
 # ── Enrichment module imports ─────────────────────────────────────────────────
 from enrichment.google_places      import enrich_business
+from enrichment.web_search_enrichment import web_search_enrich
 from enrichment.web_scraper        import scrape_and_extract
 from enrichment.gemini_client      import enrich_lead_with_gemini
 from enrichment.scorer             import score_lead
@@ -87,10 +88,11 @@ from database.models               import (
 DB_PATH = Path(__file__).parent / "data" / "leads.db"
 
 RATE = {
-    "places":  0.5,   # Google Places API
-    "scraper": 0.5,   # Web scraper (module has its own internal delay too)
-    "gemini":  0.5,   # Gemini API
-    "reoon":   1.0,   # Reoon email verification (API rate limit)
+    "places":     0.5,   # Google Places API
+    "web_search": 0.3,   # Tavily web search (faster, higher rate limit)
+    "scraper":    0.5,   # Web scraper (module has its own internal delay too)
+    "gemini":     0.5,   # Gemini API
+    "reoon":      1.0,   # Reoon email verification (API rate limit)
 }
 
 TIER_ORDER   = ("A", "B", "C", "U")
@@ -134,9 +136,20 @@ def _query(sql: str, params: list) -> List[Dict]:
 
 
 def _seg_clause(segment: str) -> Tuple[str, list]:
-    """Return (SQL fragment, params) for segment filtering."""
+    """Return (SQL fragment, params) for segment filtering.
+    Handles aliases: 'hemp_producer' matches both 'hemp' and 'hemp_producer' in DB.
+    """
     if segment == "all":
         return "", []
+    # Map pipeline segment names to possible DB values
+    SEGMENT_ALIASES = {
+        'hemp_producer':  ('hemp', 'hemp_producer'),
+        'cannabis_grower': ('cannabis', 'cannabis_grower'),
+    }
+    aliases = SEGMENT_ALIASES.get(segment)
+    if aliases:
+        placeholders = ', '.join('?' * len(aliases))
+        return f"AND segment IN ({placeholders})", list(aliases)
     return "AND segment = ?", [segment]
 
 
@@ -195,7 +208,7 @@ def run_stage1_places(segment: str, tier: Optional[str], limit: int) -> Tuple[in
     tier_sql, tier_params = _tier_clause(tier)
 
     sql = f"""
-        SELECT id, business_name, city, state, website
+        SELECT id, business_name, city, state, website, segment
         FROM leads
         WHERE google_enriched_at IS NULL
           {seg_sql}
@@ -209,21 +222,34 @@ def run_stage1_places(segment: str, tier: Optional[str], limit: int) -> Tuple[in
         log("Stage 1: no leads to enrich — all done or already enriched")
         return 0, 0
 
-    log(f"Stage 1: {len(leads)} leads to Places-enrich")
+    # Segments that use Tavily web search instead of Google Places
+    WEB_SEARCH_SEGS = {'hemp', 'hemp_producer', 'cannabis', 'cannabis_grower'}
+
+    log(f"Stage 1: {len(leads)} leads to enrich (Places for nursery, Tavily for hemp/cannabis)")
     ok = failed = 0
 
     for i, lead in enumerate(leads, 1):
         lead_id = lead["id"]
+        seg     = (lead.get("segment") or "").lower()
+        use_web_search = seg in WEB_SEARCH_SEGS
         try:
-            result = enrich_business(
-                business_name=lead["business_name"],
-                city=lead.get("city") or "",
-                state=lead.get("state") or "",
-            )
+            if use_web_search:
+                result = web_search_enrich(
+                    business_name=lead["business_name"],
+                    city=lead.get("city") or "",
+                    state=lead.get("state") or "",
+                )
+            else:
+                result = enrich_business(
+                    business_name=lead["business_name"],
+                    city=lead.get("city") or "",
+                    state=lead.get("state") or "",
+                )
             if result and "error" not in result:
                 update_enriched_data(lead_id, result)
                 ok += 1
-                log(f"  [{i}] ✓ {lead['business_name']} — rating={result.get('rating')}, "
+                method = "Tavily" if use_web_search else "Places"
+                log(f"  [{i}] ✓ {lead['business_name']} — [{method}] "
                     f"website={'yes' if result.get('website') else 'no'}")
             else:
                 err = result.get("error", "unknown") if result else "no result"
@@ -239,10 +265,10 @@ def run_stage1_places(segment: str, tier: Optional[str], limit: int) -> Tuple[in
                 [datetime.now().isoformat(), lead_id],
             )
 
-        time.sleep(RATE["places"])
+        time.sleep(RATE["web_search"] if use_web_search else RATE["places"])
 
         if i % PROGRESS_INT == 0:
-            _progress(1, "Google Places", i, ok, failed)
+            _progress(1, "Places/Tavily Enrichment", i, ok, failed)
 
     return ok, failed
 
@@ -382,9 +408,17 @@ def run_stage4_score(segment: str, tier: Optional[str], limit: int) -> Tuple[int
                scale_indicators, purchases_soil, soil_brands_mentioned,
                disqualification_signals, negative_indicators,
                appointment_only,
-               crops_grown, size_signals, tier
+               crops_grown, size_signals, tier,
+               gemini_status, enrichment_status, website
         FROM leads
-        WHERE scored_at IS NULL
+        WHERE (
+          scored_at IS NULL
+          OR (
+            COALESCE(tier_override, tier) = 'U'
+            AND gemini_status = 'enriched'
+            AND scored_at IS NOT NULL
+          )
+        )
           AND (gemini_enriched_at IS NOT NULL OR website_text IS NOT NULL OR website IS NOT NULL)
           {seg_sql}
           {tier_sql}

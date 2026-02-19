@@ -382,7 +382,7 @@ def get_all_leads():
     cursor = conn.cursor()
     cursor.execute('''
         SELECT * FROM leads
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     ''')
     leads = cursor.fetchall()
     conn.close()
@@ -485,7 +485,7 @@ def get_leads_by_enrichment_status(status):
     cursor.execute('''
         SELECT * FROM leads
         WHERE enrichment_status = ?
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     ''', (status,))
     leads = cursor.fetchall()
     conn.close()
@@ -523,7 +523,7 @@ def get_leads_by_scrape_status(status):
     cursor.execute('''
         SELECT * FROM leads
         WHERE scrape_status = ?
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     ''', (status,))
     leads = cursor.fetchall()
     conn.close()
@@ -536,7 +536,7 @@ def get_leads_with_website():
     cursor.execute('''
         SELECT * FROM leads
         WHERE website IS NOT NULL AND website != ''
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     ''')
     leads = cursor.fetchall()
     conn.close()
@@ -616,9 +616,10 @@ def update_gemini_data(lead_id, gemini_data, raw_response=None):
         gemini_data.get('confidence'),
         raw_response_json,
         # Phase 2: New ICP fields
-        gemini_data.get('uses_growing_media'),
+        # hemp prompt returns 'uses_amendments'; nursery returns 'uses_growing_media' — handle both
+        gemini_data.get('uses_growing_media') if gemini_data.get('uses_growing_media') is not None else gemini_data.get('uses_amendments'),
         gemini_data.get('production_method'),
-        gemini_data.get('is_organic_certified'),
+        gemini_data.get('is_organic_certified') if gemini_data.get('is_organic_certified') is not None else gemini_data.get('organic_certified'),
         scale_indicators_json,
         gemini_data.get('purchases_soil'),
         soil_brands_mentioned_json,
@@ -660,7 +661,7 @@ def get_leads_for_gemini_enrichment(limit=None):
         SELECT * FROM leads
         WHERE scrape_status = 'scraped'
           AND (gemini_status = 'pending' OR gemini_status IS NULL)
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     '''
 
     if limit is not None:
@@ -678,7 +679,7 @@ def get_leads_by_gemini_status(status):
     cursor.execute('''
         SELECT * FROM leads
         WHERE gemini_status = ?
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     ''', (status,))
     leads = cursor.fetchall()
     conn.close()
@@ -785,7 +786,7 @@ def get_leads_for_scoring(limit=None):
 
     query = '''
         SELECT * FROM leads
-        ORDER BY imported_at DESC
+        ORDER BY id ASC
     '''
 
     if limit is not None:
@@ -885,7 +886,7 @@ def get_leads_filtered(tier=None, state=None, business_type=None, min_score=None
 
     # Get filtered leads with sorting and pagination
     # Validate sort_by to prevent SQL injection
-    allowed_sort_columns = ['score', 'business_name', 'city', 'tier', 'imported_at']
+    allowed_sort_columns = ['score', 'business_name', 'city', 'tier', 'id']
     if sort_by not in allowed_sort_columns:
         sort_by = 'score'
 

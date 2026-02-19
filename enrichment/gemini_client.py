@@ -441,11 +441,18 @@ Extract and return ONLY a valid JSON object (no markdown, no explanation):
   "crops_grown": ["cannabis"],
   "scale_indicators": ["Array of specific size/scale quotes from the website, e.g. '50,000 sqft indoor facility', '1,500 plant license'"],
   "disqualification_signals": ["Array of red flags, e.g. 'dispensary only', 'no grow license', 'delivery service only'"],
-  "contact_name": "Full name of owner, head grower, or operations contact if mentioned, or null",
-  "contact_title": "Their role/title if known, or null",
-  "email": "Contact email if found (not generic info@), or null",
+  "contact_name": "REQUIRED: Full name of ANY relevant contact — owner, head grower, operations manager, or any named person. Return first match found, or null.",
+  "contact_title": "Their role/title if known, or 'No role found' if name found without title, or null",
+  "email": "ANY contact email on the site — info@, contact@, hello@, sales@ are ALL VALID. Only skip noreply@/donotreply@. Return the best one found, or null.",
   "confidence": "low / medium / high (confidence in extracted data)"
 }}
+
+IMPORTANT - CONTACT & EMAIL EXTRACTION (AGGRESSIVE MODE):
+- **email**: Accept info@, contact@, sales@, hello@ — ALL are valid cold outreach targets.
+  Look in: footer, header, contact page, about page, mailto: links.
+  ONLY skip: noreply@, donotreply@, mailer-daemon@
+- **contact_name**: Look in About Us, Team, Staff, Contact, History pages, bios, email signatures.
+  If no titled position found, extract best guess (family name, founder mention, any named person).
 
 IMPORTANT RULES:
 - Return ONLY the JSON object, no markdown formatting
@@ -549,13 +556,38 @@ Extract and return ONLY a valid JSON object (no markdown, no explanation):
   "crops_grown": ["hemp — include specific type like 'hemp_CBD', 'hemp_fiber', 'hemp_grain' if known"],
   "scale_indicators": ["Array of specific scale quotes: '200 acres', '50,000 lb harvest', 'family farm since 1985'"],
   "disqualification_signals": ["Array of red flags: 'retail CBD store', 'no grow operation', 'processor only'"],
-  "contact_name": "Full name of farm owner, farm manager, or operations contact if mentioned, or null",
-  "contact_title": "Their role/title if known, or null",
-  "email": "Contact email if found (not generic info@), or null",
+  "contact_name": "REQUIRED: Full name of ANY relevant contact. Priority: 1) Owner/Founder, 2) Farm Manager, 3) Operations Manager, 4) Head Grower, 5) Any named person. Return first match found, or null.",
+  "contact_title": "The role/title of contact_name, or 'No role found' if name found without title, or null",
+  "email": "ANY contact email found on the site — info@, contact@, hello@, sales@ are ALL VALID. Only skip noreply@/donotreply@. Return the best one found, or null.",
   "confidence": "low / medium / high (confidence in extracted data)"
 }}
 
-IMPORTANT RULES:
+IMPORTANT - CONTACT & EMAIL EXTRACTION (AGGRESSIVE MODE):
+- **email**: Extract ANY email address found anywhere. info@domain.com IS VALID — return it.
+  Priority: 1) Named person's email, 2) info@/contact@/hello@/sales@, 3) Any other email.
+  Look in: footer, header, contact page text, about page, mailto: links.
+  ONLY skip: noreply@, donotreply@, mailer-daemon@
+
+- **contact_name**: Use 2-phase approach:
+
+PHASE 1 - Search for TITLED positions (Priority 1-5):
+  1. Owner/Founder/President (look for: "Owner", "Founder", "President", "Proprietor")
+  2. Farm Manager (look for: "Farm Manager", "Ranch Manager", "General Manager")
+  3. Operations Manager (look for: "Operations Manager", "Production Manager")
+  4. Head Grower (look for: "Head Grower", "Lead Grower", "Master Grower")
+  5. Sales/Marketing (look for: "Sales Manager", "Marketing", "Business Development")
+
+PHASE 2 - If NO titled position found, extract BEST GUESS name:
+  - Look for: Family names in "About Us", names in team/founder sections
+  - Context clues: "Started by John Smith", "The Smith Family Farm", "Meet the Farmers"
+  - Names linked to the business ("Smith Hemp Farm" → Smith is likely owner)
+  - Email signatures, contact forms with names
+  - ALWAYS extract a name if ANY person is mentioned — even without title
+  - Require FULL name (first + last)
+
+Look in: About Us, Our Story, Team, Staff, Contact, History pages, footer, bios
+
+OTHER RULES:
 - Return ONLY the JSON object, no markdown formatting
 - Use true/false for booleans (not strings)
 - Use null for unknown/missing values (not empty string)
@@ -776,6 +808,10 @@ def enrich_lead_with_gemini(website_text, business_name, city, state, segment='n
     if not website_text or len(website_text) < 100:
         raise ValueError("Insufficient website text for analysis")
 
+    # Normalize segment values (DB uses 'hemp'/'cannabis', code uses full names)
+    segment_map = {'hemp': 'hemp_producer', 'cannabis': 'cannabis_grower'}
+    segment = segment_map.get(segment, segment)
+
     # --- Route to segment-appropriate prompt builder ---
     if segment == 'cannabis_grower':
         prompt = build_cannabis_prompt(website_text, business_name, city, state)
@@ -851,6 +887,15 @@ def enrich_lead_with_gemini(website_text, business_name, city, state, segment='n
                 data['soil_brands_mentioned'] = []
             if 'disqualification_signals' not in data or data['disqualification_signals'] is None:
                 data['disqualification_signals'] = []
+
+        # Regex fallback: if Gemini missed the email, scan raw text directly
+        if not data.get('email') and website_text:
+            skip_prefixes = ('noreply', 'donotreply', 'no-reply', 'mailer-daemon', 'bounce')
+            found_emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', website_text)
+            found_emails = [e for e in found_emails if not any(e.lower().startswith(p) for p in skip_prefixes)]
+            if found_emails:
+                data['email'] = found_emails[0]
+                data['email_source'] = 'regex_fallback'
 
         return data
 

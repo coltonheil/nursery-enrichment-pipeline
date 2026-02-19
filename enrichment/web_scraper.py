@@ -333,28 +333,28 @@ def scrape_and_extract(url):
     parsed_base = urlparse(url)
     base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
 
-    # Pages to try - prioritized for finding staff/contact information
-    # Reordered to prioritize team pages earlier (before hitting 5-page limit)
+    # Pages to try — ordered so email-bearing pages always get scraped within the 5-page limit.
+    # Contact/About pages come FIRST: they're the most likely to have email addresses.
+    # Team pages come after: valuable for nurseries but often 404 on small farms (burns failure budget).
     pages_to_scrape = [
         (url, "homepage"),
-        # Team/Staff pages FIRST - most valuable for finding contacts
+        # Contact pages FIRST — most likely to have email for small farms
+        (urljoin(base_domain, '/contact'), "contact"),
+        (urljoin(base_domain, '/contact-us'), "contact-us"),
+        (urljoin(base_domain, '/contactus'), "contact-us-2"),
+        # About pages (owner/founder info)
+        (urljoin(base_domain, '/about'), "about"),
+        (urljoin(base_domain, '/about-us'), "about-us"),
+        (urljoin(base_domain, '/our-story'), "our-story"),
+        # Team/Staff pages (valuable for nurseries, but often 404 on small farms)
         (urljoin(base_domain, '/team'), "team"),
         (urljoin(base_domain, '/our-team'), "our-team"),
         (urljoin(base_domain, '/staff'), "staff"),
         (urljoin(base_domain, '/meet-the-team'), "meet-team"),
         (urljoin(base_domain, '/people'), "people"),
-        # Additional common patterns for nurseries
         (urljoin(base_domain, '/meet-us'), "meet-us"),
         (urljoin(base_domain, '/who-we-are'), "who-we-are"),
-        (urljoin(base_domain, '/our-story'), "our-story"),
-        # About pages (owner/founder info)
-        (urljoin(base_domain, '/about'), "about"),
-        (urljoin(base_domain, '/about-us'), "about-us"),
         (urljoin(base_domain, '/aboutus'), "about-us-2"),
-        # Contact pages (sometimes have names)
-        (urljoin(base_domain, '/contact'), "contact"),
-        (urljoin(base_domain, '/contact-us'), "contact-us"),
-        (urljoin(base_domain, '/contactus'), "contact-us-2"),
     ]
 
     all_text = []

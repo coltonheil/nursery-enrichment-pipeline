@@ -298,7 +298,8 @@ def check_icp_qualification(lead: dict) -> tuple:
     # Helper to safely get lead values
     def get_value(key, default=None):
         if hasattr(lead, 'get'):
-            return lead.get(key, default)
+            val = lead.get(key)
+            return val if val is not None else default
         else:
             try:
                 return lead[key] if lead[key] is not None else default
@@ -335,14 +336,15 @@ def check_icp_qualification(lead: dict) -> tuple:
     # Cannabis cultivators and hemp growers are legitimate amendment buyers —
     # they grow in fields and apply inputs between cycles. They must not be
     # disqualified solely because they lack nursery-style production signals.
+    # Note: DB stores segment as 'hemp'/'cannabis'; normalized forms also accepted.
     segment = get_value('segment') or ""
-    if segment in ['cannabis_grower', 'hemp_producer']:
-        # Dispensary-only operations do not cultivate — disqualify them
-        if business_type == 'dispensary':
+    if segment in ['cannabis_grower', 'hemp_producer', 'hemp', 'cannabis']:
+        # Dispensary-only and processor-only operations don't cultivate
+        non_cultivator_types = ['dispensary', 'processor', 'retail_dispensary']
+        if business_type in non_cultivator_types:
             return False, "disqualified"
-        # Cultivators and growers pass as primary ICP
-        if business_type in ['cannabis_cultivator', 'hemp_grower']:
-            return True, "primary"
+        # All other hemp/cannabis segment leads qualify — segment assignment IS the ICP gate
+        return True, "primary"
 
     # Check PRIMARY ICP signals (uses growing media)
     if get_value('uses_growing_media') == True:
@@ -463,7 +465,8 @@ def calculate_geo_score(lead: dict) -> int:
     # Helper to safely get lead values
     def get_value(key, default=None):
         if hasattr(lead, 'get'):
-            return lead.get(key, default)
+            val = lead.get(key)
+            return val if val is not None else default
         else:
             try:
                 return lead[key] if lead[key] is not None else default
@@ -523,7 +526,8 @@ def calculate_score(lead) -> dict:
     # Helper to safely get lead values
     def get_value(key, default=None):
         if hasattr(lead, 'get'):
-            return lead.get(key, default)
+            val = lead.get(key)
+            return val if val is not None else default
         else:
             try:
                 return lead[key] if lead[key] is not None else default
